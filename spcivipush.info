@@ -1,0 +1,6 @@
+name = SP CiviCRM Push
+description =  Allows other modules to use functions to push contacts to CiviCRM and add them to groups.
+core = 7.x
+package = sprbs
+dependencies[] = sprbs
+dependencies[] = spciviapi

@@ -1,0 +1,9 @@
+<?php
+
+function spcivipush_uninstall() {
+  variable_del('spcivipush_civi_tags');
+  variable_del('spcivipush__unverified_tag');
+  variable_del('spcivipush_merge_contact_email_address');
+  variable_del('spcivipush_check_name_email_address');
+  variable_del('spcivipush_check_address_email_address');
+}
