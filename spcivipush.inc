@@ -560,29 +560,25 @@ function _spcivipush_check_result($result, $dataname, $action, $params = NULL, $
 }
 
 function spcivipush_check_address_manually($street_and_number, $contact_id) {
-  // Check if there is a house number addition in a street_address, if so, send mail for manual correction.
+  // Check if there is a house number numeric addition in a street_address, if so, send mail for manual correction.
   if (!empty($street_and_number)) {
-    preg_match('/\d+/', $street_and_number, $m, PREG_OFFSET_CAPTURE);
-    if (sizeof($m)) {
-      $addition_pos = $m[0][1] + strlen($m[0][0]);
-      if ($addition_pos < strlen($street_and_number)) {
-        // Addition found, send mail.
-        $check_address_email = variable_get('spcivipush_check_address_email_address', '');
-        if (!empty($check_address_email)) {
-          // Send mail for manually merging.
-          $params = array(
-            'contact_id' => $contact_id,
-            'street_and_number' => $street_and_number,
-          );
-          $message = drupal_mail('spcivipush', 'check_address', $check_address_email, language_default(), $params, 'webmaster@sp.nl');
-          if (!empty($message['result'])) { 
-            watchdog('spcivipush', 'Contact controle huisnummer toevoeging, mail verzonden.');
-            drupal_set_message('Contact controle huisnummer toevoeging, mail verzonden.');
-          }
-          else {
-            watchdog('spcivipush', 'Contact controle huisnummer toevoeging, geen mail verzonden verzonden (fout opgetreden).');
-            drupal_set_message('Contact controle huisnummer toevoeging, geen mail verzonden (fout opgetreden).');
-          }
+    if (preg_match('/ \d+[^0-9]+\d+/', $street_and_number)) {
+      // Addition found, send mail.
+      $check_address_email = variable_get('spcivipush_check_address_email_address', '');
+      if (!empty($check_address_email)) {
+        // Send mail for manually merging.
+        $params = array(
+          'contact_id' => $contact_id,
+          'street_and_number' => $street_and_number,
+        );
+        $message = drupal_mail('spcivipush', 'check_address', $check_address_email, language_default(), $params, 'webmaster@sp.nl');
+        if (!empty($message['result'])) { 
+          watchdog('spcivipush', 'Contact controle huisnummer toevoeging, mail verzonden.');
+          drupal_set_message('Contact controle huisnummer toevoeging, mail verzonden.');
+        }
+        else {
+          watchdog('spcivipush', 'Contact controle huisnummer toevoeging, geen mail verzonden verzonden (fout opgetreden).');
+          drupal_set_message('Contact controle huisnummer toevoeging, geen mail verzonden (fout opgetreden).');
         }
       }
     }
