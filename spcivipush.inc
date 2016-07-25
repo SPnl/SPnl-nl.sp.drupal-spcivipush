@@ -372,17 +372,8 @@ function spcivipush_find_same_contacts($data, $debug_info) {
         if (!empty($contact_results['values'])) {
           // Check if first name and last name are identical.
           $contact = array_pop($contact_results['values']);
-          if (
-            (
-              isset($data['last_name']) &&
-              strpos(strtolower($contact['display_name']), strtolower($data['last_name'])) !== FALSE
-            ) ||
-            (
-              isset($data['first_name']) &&
-              strpos(strtolower($contact['display_name']), strtolower($data['first_name'])) !== FALSE
-            )
-          ) {
-            $same_contacts[$phone_contact_id] = $phone_contact_id;
+          if (spcivipush_compare_names($data, $contact)) {
+            $same_contacts[$contact_id] = $contact_id;
           }
         }
       }
@@ -395,8 +386,10 @@ function spcivipush_find_same_contacts($data, $debug_info) {
   // Find similar contacts based on email, first- and last name.
   if (
     isset($data['email']) &&
-    isset($data['first_name']) &&
-    isset($data['last_name'])
+    (
+      isset($data['first_name']) || 
+      isset($data['last_name'])
+    )
   ) {
     $params = array(
       'option.limit' => 5,
@@ -417,12 +410,8 @@ function spcivipush_find_same_contacts($data, $debug_info) {
           $contact_results = $spcivi->api('Contact', 'get', $params);
           if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
             if (!empty($contact_results['values'])) {
-              // Check if first name and last name are identical.
               $contact = array_pop($contact_results['values']);
-              if (
-                $data['first_name'] === $contact['first_name'] &&
-                $data['last_name'] === $contact['last_name']
-              ) {
+              if (spcivipush_compare_names($data, $contact)) {
                 $same_contacts[$contact_id] = $contact_id;
               }
             }
@@ -854,4 +843,39 @@ function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
   return TRUE;
 }
 
-
+function spcivipush_compare_names($data, $contact) {
+  // Check if first name and last name are identical.
+  $name_types = array(
+    'first_name',
+    'last_name',
+  );
+  $new_names_added = '';
+  $existing_names_added = '';
+  $new_names = array();
+  $existing_names = array();
+  foreach ($name_types as $name_type) {
+    if (!empty($data[$name_type]) && strlen($data[$name_type]) > 2) {
+      $new_names[] = strtolower($data[$name_type]);
+      $new_names_added .= strtolower($data[$name_type]);
+    }
+    if (!empty($contact[$name_type]) && strlen($contact[$name_type]) > 2) {
+      $existing_names[] = strtolower($contact[$name_type]);
+      $existing_names_added .= strtolower($contact[$name_type]);
+    }
+  }
+  if (!empty($existing_names_added)) {
+    foreach ($new_names as $name) {
+      if (strpos($existing_names_added, $name) !== FALSE) {
+        return TRUE;
+      }
+    }
+  }
+  if (!empty($new_names_added)) {
+    foreach ($existing_names as $name) {
+      if (strpos($new_names_added, $name) !== FALSE) {
+        return TRUE;
+      }
+    }
+  }
+  return FALSE;
+}
