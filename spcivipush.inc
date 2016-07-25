@@ -361,10 +361,10 @@ function spcivipush_find_same_contacts($data, $debug_info) {
       }
     }
     // check if found contacts have same last name.
-    foreach ($same_contacts_phone as $phone_contact_id) {
+    foreach ($same_contacts_phone as $contact_id) {
       // Get contact information.
       $params = array(
-        'contact_id' => $phone_contact_id,
+        'contact_id' => $contact_id,
         'contact_is_deleted' => 0,
       );
       $contact_results = $spcivi->api('Contact', 'get', $params);
