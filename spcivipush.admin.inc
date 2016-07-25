@@ -56,7 +56,7 @@ function spcivipush_settings_form_validate($form, &$form_state) {
     if (!empty($values[$field])) {
       $email_addresses = explode(',', $values[$field]);
       foreach ($email_addresses as $email) {
-        if (! valid_email_address($values[$field])) {
+        if (! valid_email_address(trim($email))) {
           form_set_error($field, 'Vul een geldig e-mailadres in!');
         }
       }
