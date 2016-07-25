@@ -79,13 +79,13 @@ function spcivipush_sync_contact($data, $groups, $debug_info, $source) {
   if ($same_contacts !== FALSE) {
     // Sync contact.
     if (empty($same_contacts) || count($same_contacts) > 1) {
-      $contact = spcivipush_add_contact($data, $debug_info, $source);
+      $contact_id = spcivipush_add_contact($data, $debug_info, $source);
       if (count($same_contacts) > 1) {
         $merge_email = variable_get('spcivipush_merge_contact_email_address', '');
         if (!empty($merge_email)) {
           // Send mail for manually merging.
           $params = array(
-            'contact_id' => $contact,
+            'contact_id' => $contact_id,
           );
           $message = drupal_mail('spcivipush', 'manual_merge', $merge_email, language_default(), $params, 'webmaster@sp.nl');
           if (!empty($message['result'])) { 
@@ -107,9 +107,14 @@ function spcivipush_sync_contact($data, $groups, $debug_info, $source) {
       $contact_id = spcivipush_merge_contacts($data, $same_contacts, $debug_info);
     }
     if (!empty($contact_id)) {
-      // Add contact to groups.
-      $result = spcivipush_contact_add_groups($contact_id, $groups, $debug_info);
-      if (!empty($result)) {
+      if (!empty($groups)) {
+        // Add contact to groups.
+        $result = spcivipush_contact_add_groups($contact_id, $groups, $debug_info);
+        if (!empty($result)) {
+          return $contact_id;
+        }
+      }
+      else {
         return $contact_id;
       }
     }
@@ -843,6 +848,7 @@ function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
   }
   if ($added_to_groups) {
     $groups_text = implode(', ', $added_groups);
+    drupal_set_message('Contact nr. '.$contact_id.' was added to groups ('.$groups_text.').');
     watchdog('spcivipush', 'Contact nr. '.$contact_id.' was added to groups ('.$groups_text.').');
   }
   return TRUE;
