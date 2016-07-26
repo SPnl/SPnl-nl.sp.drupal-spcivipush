@@ -9,7 +9,7 @@ function spcivipush_parse_data($data) {
     if (isset($data[$key])) {
       $validated_value = call_user_func('spcivipush_valid_' . $key, $data[$key]);
       if (!empty($validated_value)) {
-        $validated_data[$key] = $validated_value;
+        $validated_data[$key] = substr($validated_value, 0, 64);
       }
     }
   }
