@@ -570,18 +570,12 @@ function spcivipush_check_address_manually($street_and_number, $contact_id) {
       if (!empty($check_address_email)) {
         // Send mail for manually merging.
         $params = array(
+          'type' => 'house_number_addition_check',
+          'description' => 'controle huisnummer toevoeging',
           'contact_id' => $contact_id,
           'street_and_number' => $street_and_number,
         );
-        $message = drupal_mail('spcivipush', 'check_address', $check_address_email, language_default(), $params, 'webmaster@sp.nl');
-        if (!empty($message['result'])) { 
-          watchdog('spcivipush', 'Contact controle huisnummer toevoeging, mail verzonden.');
-          drupal_set_message('Contact controle huisnummer toevoeging, mail verzonden.');
-        }
-        else {
-          watchdog('spcivipush', 'Contact controle huisnummer toevoeging, geen mail verzonden verzonden (fout opgetreden).');
-          drupal_set_message('Contact controle huisnummer toevoeging, geen mail verzonden (fout opgetreden).');
-        }
+        spcivipush_send_address_check_mail($params);
       }
     }
   }
@@ -794,6 +788,14 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
             $create_address_results = $spcivi->api('Address', 'create', $params);
             if(_spcivipush_check_result($create_address_results, 'een adres', 'create', $params, $debug_info)) {
               $merged_data = TRUE;
+              // Send e-mail to manually merge addresses.
+              $params = array(
+                'type' => 'multiple_address_check',
+                'description' => 'correctie meer dan één adres',
+                'contact_id' => $contact_id,
+              );
+              spcivipush_send_address_check_mail($params);
+              // Check if street number needs to be checked.
               if (!empty($data['street_and_number'])) {
                 spcivipush_check_address_manually($data['street_and_number'], $contact_id);
               }
@@ -876,4 +878,19 @@ function spcivipush_compare_names($data, $contact) {
     }
   }
   return FALSE;
+}
+
+function spcivipush_send_address_check_mail($params) {
+  $check_address_email = variable_get('spcivipush_check_address_email_address', '');
+  if (!empty($check_address_email)) {
+    $message = drupal_mail('spcivipush', 'check_address', $check_address_email, language_default(), $params, 'webmaster@sp.nl');
+    if (!empty($message['result'])) { 
+      watchdog('spcivipush', 'Contact controle adres ('.$params['description'].'), mail verzonden.');
+      drupal_set_message('Contact '.$params['description'].', mail verzonden.');
+    }
+    else {
+      watchdog('spcivipush', 'Contact '.$params['description'].', geen mail verzonden verzonden (fout opgetreden).');
+      drupal_set_message('Contact '.$params['description'].', geen mail verzonden (fout opgetreden).');
+    }
+  }
 }
