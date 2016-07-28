@@ -165,10 +165,12 @@ function spcivipush_split_name($name) {
 
   // Replace terms.
   $replace = array(
-    ' v. ' => ' van ',
-    ' vd. ' => ' van de ',
-    ' vd ' => ' van de ',
-    ' v/d ' => ' van de ',
+    'v' => 'van',
+    'v.' => 'van',
+    'vd' => 'van de',
+    'vd.' => 'van de',
+    'v.d.' => 'van de',
+    'v/d' => 'van de',
   );
   foreach ($replace as $orig => $new) {
     if (strpos($name, ' '.$orig.' ') !== FALSE) {
