@@ -278,12 +278,12 @@ function spcivipush_valid_street($street) {
 function spcivipush_valid_house_number($house_number) {
   // Allow house number and addition, split when parsing data.
   $house_number = trim($house_number);
-  if (!empty($house_number)) return $house_number;
+  if (isset($house_number) && strlen($house_number) > 0) return $house_number;
 }
 
 function spcivipush_valid_house_number_addition($house_number_addition) {
   $house_number_addition = trim($house_number_addition);
-  if (!empty($house_number_addition)) return $house_number_addition;
+  if (isset($house_number_addition) && strlen($house_number_addition) > 0) return $house_number_addition;
 }
 
 function spcivipush_valid_street_and_number($street_and_number) {
