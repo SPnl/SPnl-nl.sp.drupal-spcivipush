@@ -143,7 +143,7 @@ function spcivipush_get_data_names() {
 
 function spcivipush_split_house_number($house_number) {
   $house_number = trim($house_number);
-  $regex = "@^([0-9]+)([!0-9].*)$@";
+  $regex = "@^([0-9]+)([^0-9].*)$@";
   if (preg_match($regex, $house_number, $matches)) {
     return $matches;
   }
