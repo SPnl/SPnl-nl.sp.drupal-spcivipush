@@ -428,6 +428,55 @@ function spcivipush_find_same_contacts($data, $debug_info) {
       return FALSE;
     }
   }
+
+  // Find similar contacts based on address.
+  if (
+    isset($data['postal_code']) &&
+    isset($data['house_number']) &&
+    (
+      isset($data['first_name']) || 
+      isset($data['last_name'])
+    )
+  ) {
+
+    // Check if address with same house number and postal code exists.
+    $params = array(
+      'option.limit' => 5,
+      'street_number' => $data['house_number'],
+      'postal_code' => $data['postal_code'],
+    );
+    $get_address_result = $spcivi->api('Address', 'get', $params);
+    if(_spcivipush_check_result($get_address_result, 'een adres', 'get', $params, $debug_info)) {
+      if (!empty($get_address_result['values'])) {
+        foreach ($get_address_result['values'] as $value) {
+          $address_contact_ids[$value['contact_id']] = $value['contact_id'];
+        }
+        foreach ($address_contact_ids as $contact_id) {
+          // Get contact information.
+          $params = array(
+            'contact_id' => $contact_id,
+            'contact_is_deleted' => 0,
+          );
+          $contact_results = $spcivi->api('Contact', 'get', $params);
+          if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
+            if (!empty($contact_results['values'])) {
+              $contact = array_pop($contact_results['values']);
+              if (spcivipush_first_name_equal($data, $contact)) {
+                $same_contacts[$contact_id] = $contact_id;
+              }
+            }
+          }
+          else {
+            return FALSE;
+          }
+        }
+      }
+    }
+    else {
+      return FALSE;
+    }
+  }
+
   return $same_contacts;
 }
 
