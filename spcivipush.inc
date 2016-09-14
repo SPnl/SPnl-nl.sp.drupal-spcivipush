@@ -843,7 +843,10 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
                 'description' => 'correctie meer dan één adres',
                 'contact_id' => $contact_id,
               );
-              spcivipush_send_address_check_mail($params);
+              // If new address was added next to existing, send mail for checking.
+              if (empty($contact['address_id'])) {
+                spcivipush_send_address_check_mail($params);
+              }
               // Check if street number needs to be checked.
               if (!empty($data['street_and_number'])) {
                 spcivipush_check_address_manually($data['street_and_number'], $contact_id);
