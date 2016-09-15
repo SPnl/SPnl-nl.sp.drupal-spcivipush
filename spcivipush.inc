@@ -844,7 +844,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
                 'contact_id' => $contact_id,
               );
               // If new address was added next to existing, send mail for checking.
-              if (empty($contact['address_id'])) {
+              if (!empty($contact['address_id'])) {
                 spcivipush_send_address_check_mail($params);
               }
               // Check if street number needs to be checked.
