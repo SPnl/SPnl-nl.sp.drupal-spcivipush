@@ -78,7 +78,7 @@ function spcivipush_sync_contact($data, $groups, $debug_info, $source) {
   $same_contacts = spcivipush_find_same_contacts($data, $debug_info);
   if ($same_contacts !== FALSE) {
     // Sync contact.
-    if (empty($same_contacts) || count($same_contacts) > 1) {
+    if (empty($same_contacts)) {
       $contact_id = spcivipush_add_contact($data, $debug_info, $source);
       if (count($same_contacts) > 1) {
         $merge_email = variable_get('spcivipush_merge_contact_email_address', '');
