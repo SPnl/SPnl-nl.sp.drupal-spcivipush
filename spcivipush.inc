@@ -548,7 +548,7 @@ function spcivipush_add_contact($data, $debug_info, $source) {
       }
       $params = array(
         'contact_id' => $contact_id,
-        'location_type_id' => 3,
+        'location_type_id' => 1,
         'phone' => $data['telephone'],
         'is_primary' => 1,
         'phone_type_id' => $phone_type_id,
@@ -746,7 +746,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           // Phone doesn't exist, add.
           if (empty($contact['phone'])) {
             $primary = 1;
-            $location_type_id = 3;
+            $location_type_id = 1;
           }
           else {
             $primary = 0;
