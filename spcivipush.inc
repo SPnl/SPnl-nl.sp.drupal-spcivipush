@@ -80,27 +80,28 @@ function spcivipush_sync_contact($data, $groups, $debug_info, $source) {
     // Sync contact.
     if (empty($same_contacts)) {
       $contact_id = spcivipush_add_contact($data, $debug_info, $source);
-      if (count($same_contacts) > 1) {
-        $merge_email = variable_get('spcivipush_merge_contact_email_address', '');
-        if (!empty($merge_email)) {
-          // Send mail for manually merging.
-          $params = array(
-            'contact_id' => $contact_id,
-          );
-          $message = drupal_mail('spcivipush', 'manual_merge', $merge_email, language_default(), $params, 'webmaster@sp.nl');
-          if (!empty($message['result'])) { 
-            watchdog('spcivipush', 'Contact handmatig samenvoegen, mail verzonden.');
-            drupal_set_message('Contact handmatig samenvoegen, mail verzonden.');
-          }
-          else {
-            watchdog('spcivipush', 'Contact handmatig samenvoegen, geen mail verzonden verzonden (fout opgetreden).');
-            drupal_set_message('Contact handmatig samenvoegen, geen mail verzonden (fout opgetreden).');
-          }
+    }
+    elseif (count($same_contacts) > 1) {
+      $contact_id = spcivipush_merge_contacts($data, $same_contacts, $debug_info);
+      $merge_email = variable_get('spcivipush_merge_contact_email_address', '');
+      if (!empty($merge_email)) {
+        // Send mail for manually merging.
+        $params = array(
+          'contact_id' => $contact_id,
+        );
+        $message = drupal_mail('spcivipush', 'manual_merge', $merge_email, language_default(), $params, 'webmaster@sp.nl');
+        if (!empty($message['result'])) { 
+          watchdog('spcivipush', 'Contact handmatig samenvoegen, mail verzonden.');
+          drupal_set_message('Contact handmatig samenvoegen, mail verzonden.');
         }
         else {
-          watchdog('spcivipush', 'Contact handmatig samenvoegen, geen mail verzonden.');
-          drupal_set_message('Contact handmatig samenvoegen, geen mail verzonden.');
+          watchdog('spcivipush', 'Contact handmatig samenvoegen, geen mail verzonden verzonden (fout opgetreden).');
+          drupal_set_message('Contact handmatig samenvoegen, geen mail verzonden (fout opgetreden).');
         }
+      }
+      else {
+        watchdog('spcivipush', 'Contact handmatig samenvoegen, geen mail verzonden.');
+        drupal_set_message('Contact handmatig samenvoegen, geen mail verzonden.');
       }
     }
     else {
