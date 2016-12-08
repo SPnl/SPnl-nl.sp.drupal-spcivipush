@@ -79,7 +79,14 @@ function spcivipush_sync_contact($data, $groups, $debug_info, $source) {
   if ($same_contacts !== FALSE) {
     // Sync contact.
     if (empty($same_contacts)) {
-      $contact_id = spcivipush_add_contact($data, $debug_info, $source);
+      if (!empty($data['contact_id'])) {
+        watchdog('spcivipush', 'Contact nr. ' . $data['contact_id'] . ' kon niet worden gevonden in CiviCRM.');
+        drupal_set_message('Contact nr. ' . $data['contact_id'] . ' kon niet worden gevonden in CiviCRM.');
+        return 'contact id not found';
+      }
+      else {
+        $contact_id = spcivipush_add_contact($data, $debug_info, $source);
+      }
     }
     elseif (count($same_contacts) > 1) {
       $contact_id = spcivipush_merge_contacts($data, $same_contacts, $debug_info);
@@ -614,7 +621,7 @@ function _spcivipush_check_result($result, $dataname, $action, $params = NULL, $
   $place_name = ($action === 'get') ? 'uit' : 'in';
   if (!isset($result['is_error']) || $result['is_error'] == 1) {
     drupal_set_message('Fout bij het ' . $action_name . ' van ' . $dataname . ' ' . $place_name . ' CiviCRM.', 'error');
-    watchdog('spcivisync', '<p>Fout bij het ' . $action_name . ' van ' . $dataname . ' ' . $place_name . ' CiviCRM.</p>Resultaat:<pre>' . print_r($result, TRUE) . '</pre>Parameters:<pre>' . print_r($params, TRUE) . '</pre>Debug info:<pre>' . print_r($debug_info, TRUE) . '</pre>', array(), WATCHDOG_ERROR);
+    watchdog('spcivipush', '<p>Fout bij het ' . $action_name . ' van ' . $dataname . ' ' . $place_name . ' CiviCRM.</p>Resultaat:<pre>' . print_r($result, TRUE) . '</pre>Parameters:<pre>' . print_r($params, TRUE) . '</pre>Debug info:<pre>' . print_r($debug_info, TRUE) . '</pre>', array(), WATCHDOG_ERROR);
     return FALSE;
   }
   return TRUE;
