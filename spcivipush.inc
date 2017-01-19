@@ -35,6 +35,7 @@ function spcivipush_parse_data($data) {
       }
     }
   }
+  $validated_data['overwrite'] = empty($data['overwrite']) ? FALSE : TRUE;
   return $validated_data;
 }
 
@@ -648,6 +649,12 @@ function spcivipush_check_address_manually($street_and_number, $contact_id) {
 }
 
 function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
+  if (!empty($data['overwrite']) && !empty($data['contact_id']) && spcivipush_overwrite_location()) {
+    $overwrite = TRUE;
+  }
+  else {
+    $overwrite = FALSE;
+  }
   $merged_data = FALSE;
   $spcivi = \SPCivi::getInstance();
   set_time_limit(60);
@@ -667,8 +674,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
 
       // Merge name data with contact.
       if (
-        empty($contact['first_name']) &&
-        empty($contact['last_name']) &&
+        ((empty($contact['first_name']) && empty($contact['last_name'])) || $overwrite) &&
         (
           !empty($data['first_name']) ||
           !empty($data['last_name']) ||
@@ -714,7 +720,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           return FALSE;
     }
         if (!empty($get_emails_result) && empty($get_emails_result['values'])) {
-          if (empty($contact['email'])) {
+          if (empty($contact['email']) || $overwrite) {
             $primary = 1;
             $location_type_id = 3;
           }
@@ -752,7 +758,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
         }
         if (!empty($get_phone_result) && empty($get_phone_result['values'])) {
           // Phone doesn't exist, add.
-          if (empty($contact['phone'])) {
+          if (empty($contact['phone']) || $overwrite) {
             $primary = 1;
             $location_type_id = 1;
           }
@@ -785,8 +791,8 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
 
       // Merge address data if no address with same house number or postal code exists.
       if (!empty($data['house_number']) || !empty($data['postal_code']) || (!empty($data['street_and_number']) && !empty($data['locality']))) {
+        // Check if address with same house number exists.
         if (!empty($data['house_number'])) {
-          // Check if address with same house number exists.
           $params = array(
             'contact_id' => $contact_id,
             'street_number' => $data['house_number'],
@@ -796,8 +802,8 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
             return FALSE;
           }
         }
+        // Check if address with same postal code exists.
         if (!empty($data['postal_code'])) {
-          // Check if address with same postal code exists.
           $params = array(
             'contact_id' => $contact_id,
             'postal_code' => $data['postal_code'],
@@ -807,21 +813,25 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
             return FALSE;
           }
         }
-        if (!empty($data['street_and_number']) && !empty($data['locality']) && empty($contact['address_id'])) {
-          // Add address.
-          $add_address = TRUE;
+        // Check if address with same postal code exists.
+        if (!empty($data['street_and_number'])) {
+          $params = array(
+            'contact_id' => $contact_id,
+            'street_address' => $data['street_and_number'],
+          );
+          $get_street_address_result = $spcivi->api('Address', 'get', $params);
+          if(!_spcivipush_check_result($get_street_address_result, 'een adres', 'get', $params, $debug_info)) {
+            return FALSE;
+          }
         }
-        else {
-          $add_address = FALSE;
-        }
+
         if (
-          (
             empty($get_street_number_address_result['values']) &&
+            empty($get_postal_code_address_result['values']) &&
             empty($get_postal_code_address_result['values'])
-          ) || $add_address
         ) {
-          // Add extra address.
-          if (empty($contact['address_id'])) {
+          if (empty($contact['address_id']) || $overwrite) {
+            // Add primary address.
             $primary = 1;
             $location_type_id = 3;
           }
@@ -853,20 +863,23 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           if ($address_data_found) {
             $create_address_results = $spcivi->api('Address', 'create', $params);
             if(_spcivipush_check_result($create_address_results, 'een adres', 'create', $params, $debug_info)) {
-              $merged_data = TRUE;
-              // Send e-mail to manually merge addresses.
-              $params = array(
-                'type' => 'multiple_address_check',
-                'description' => 'correctie meer dan één adres',
-                'contact_id' => $contact_id,
-              );
-              // If new address was added next to existing, send mail for checking.
-              if (!empty($contact['address_id'])) {
+              // If new address was added to existing one.
+              if (
+                !empty($create_address_results['values']) && 
+                !empty($contact['address_id'])
+                ) {
+                $merged_data = TRUE;
+                // Send e-mail to manually merge addresses.
+                $params = array(
+                  'type' => 'multiple_address_check',
+                  'description' => 'correctie meer dan één adres',
+                  'contact_id' => $contact_id,
+                );
                 spcivipush_send_address_check_mail($params);
-              }
-              // Check if street number needs to be checked.
-              if (!empty($data['street_and_number'])) {
-                spcivipush_check_address_manually($data['street_and_number'], $contact_id);
+                // Check if street number needs to be checked.
+                if (!empty($data['street_and_number'])) {
+                  spcivipush_check_address_manually($data['street_and_number'], $contact_id);
+                }
               }
             }
             else {
@@ -950,4 +963,13 @@ function spcivipush_send_address_check_mail($params) {
       drupal_set_message('Contact '.$params['description'].', geen mail verzonden (fout opgetreden).');
     }
   }
+}
+
+function spcivipush_overwrite_location() {
+  $ip_address = ip_address();
+  $location_ip = variable_get('spcivipush_overwrite_location_ip', FALSE);                              
+  if ($ip_address === $location_ip) {
+    return TRUE;
+  }
+  return FALSE;
 }

@@ -19,7 +19,14 @@ function spcivipush_settings_form($form, &$form_state) {
     '#default_value' => variable_get('spcivipush_unverified_tag', array()),
   );
 
-  // Set e-mail settings.
+  $form['spcivipush_civicrm_settings']['spcivipush_overwrite_location_ip'] = array(
+    '#type' => 'textfield',
+    '#title' => 'IP adres van locatie waar contactgegevens direct mogen worden aangepast.',
+    '#default_value' => variable_get('spcivipush_overwrite_location_ip', ''),
+    '#required' => TRUE,
+  );
+
+  // Set e-mail settingsm
   $form['spcivipush_email_settings'] = array(
     '#type' => 'fieldset',
     '#title' => 'E-mail instellingen',
