@@ -687,7 +687,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
         $new_name = !empty($new_name) ? $new_name : '';
         
         if (!empty($new_name) && $old_name !== $new_name) {
-          if ((empty($old_first) && empty($old_last)) || $overwrite) {
+          if (empty($old_name) || $overwrite) {
             // Write new name without confirmation.
 
             $params = array(
