@@ -678,21 +678,15 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
       if (!empty($data['first_name']) || !empty($data['last_name']) || !empty($data['name'])) {
 
         // Check if name has changed.
-        $old_first = empty($contact['first_name']) ? '' : $contact['first_name'];
-        $old_middle = empty($contact['middle_name']) ? '' : $contact['middle_name'];
-        $old_last = empty($contact['last_name']) ? '' : $contact['last_name'];
         $new_first = empty($data['first_name']) ? '' : $data['first_name'];
         $new_middle = empty($data['middle_name']) ? '' : $data['middle_name'];
         $new_last = empty($data['last_name']) ? '' : $data['last_name'];
         $old_name = empty($contact['display_name']) ? '' : $contact['display_name'];
-        $new_name = empty($data['name']) ? '' : $data['name'];
+        $new_name = preg_replace('!\s+!', ' ', implode(' ', array($new_first, $new_middle, $new_last)));
+        $new_name = !empty($new_name) ? $new_name : $data['name'];
+        $new_name = !empty($new_name) ? $new_name : '';
         
-        if (
-          // Changed name.
-          (!empty($new_first) && $old_first !== $new_first) ||
-          (!empty($new_last) && $old_last !== $new_last) ||
-          (!empty($new_name) && $old_name !== $new_name)
-        ) {
+        if (!empty($new_name) && $old_name !== $new_name) {
           if ((empty($old_first) && empty($old_last)) || $overwrite) {
             // Write new name without confirmation.
 
@@ -717,7 +711,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
             if(_spcivipush_check_result($merge_contact_results, 'contacten', 'create', $params, $debug_info)) {
               $merged_data['name'] = array(
                 'original' => $contact['display_name'],
-                'new' => implode(' ', array($new_first, $new_middle, $new_last)),
+                'new' => $new_name,
                 'changed' => TRUE,
               );
             }
@@ -729,7 +723,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
             // No new name written, create action to check new name.
             $merged_data['name'] = array(
               'original' => $contact['display_name'],
-              'new' => implode(' ', array($new_first, $new_middle, $new_last)),
+              'new' => $new_name,
               'changed' => FALSE,
             );
           }
