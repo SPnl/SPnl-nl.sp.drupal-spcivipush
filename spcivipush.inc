@@ -673,41 +673,66 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
       watchdog('spcivipush', 'Bestaand contact gevonden: ' . $contact_id);
 
       // Merge name data with contact.
-      if (
-        ((empty($contact['first_name']) && empty($contact['last_name'])) || $overwrite) &&
-        (
-          !empty($data['first_name']) ||
-          !empty($data['last_name']) ||
-          !empty($data['name'])
-        )
-      ) {
-        $params = array(
-          'id' => $contact_id,
-        );
-        $autosync = array(
-          'first_name' => 'first_name',
-          'middle_name' => 'middle_name',
-          'last_name' => 'last_name',
-        );
-        foreach ($autosync as $key => $civikey) {
-          if (!empty($data[$key])) {
-            $params[$civikey] = $data[$key];
+
+      // check if new name data.
+      if (!empty($data['first_name']) || !empty($data['last_name']) || !empty($data['name'])) {
+
+        // Check if name has changed.
+        $old_first = empty($contact['first_name']) ? '' : $contact['first_name'];
+        $old_middle = empty($contact['middle_name']) ? '' : $contact['middle_name'];
+        $old_last = empty($contact['last_name']) ? '' : $contact['last_name'];
+        $new_first = empty($data['first_name']) ? '' : $data['first_name'];
+        $new_middle = empty($data['middle_name']) ? '' : $data['middle_name'];
+        $new_last = empty($data['last_name']) ? '' : $data['last_name'];
+        $old_name = empty($contact['display_name']) ? '' : $contact['display_name'];
+        $new_name = empty($data['name']) ? '' : $data['name'];
+        
+        if (
+          // Changed name.
+          (!empty($new_first) && $old_first !== $new_first) ||
+          (!empty($new_last) && $old_last !== $new_last) ||
+          (!empty($new_name) && $old_name !== $new_name)
+        ) {
+          if ((empty($old_first) && empty($old_last)) || $overwrite) {
+            // Write new name without confirmation.
+
+            $params = array(
+              'id' => $contact_id,
+            );
+            $autosync = array(
+              'first_name' => 'first_name',
+              'middle_name' => 'middle_name',
+              'last_name' => 'last_name',
+            );
+            foreach ($autosync as $key => $civikey) {
+              if (!empty($data[$key])) {
+                $params[$civikey] = $data[$key];
+              }
+            }
+            // Make sure last name is set, if data is available.
+            if (empty($data['first_name']) && empty($data['last_name']) && !empty($data['name'])) {
+              $params['last_name'] = $data['name'];
+            }
+            $merge_contact_results = $spcivi->api('Contact', 'create', $params);
+            if(_spcivipush_check_result($merge_contact_results, 'contacten', 'create', $params, $debug_info)) {
+              $merged_data['name'] = array(
+                'original' => $contact['display_name'],
+                'new' => implode(' ', array($new_first, $new_middle, $new_last)),
+                'changed' => TRUE,
+              );
+            }
+            else {
+              return FALSE;
+            }
           }
-        }
-        // Make sure last name is set, if data is available.
-        if (empty($data['first_name']) && empty($data['last_name']) && !empty($data['name'])) {
-          $params['last_name'] = $data['name'];
-        }
-        $merge_contact_results = $spcivi->api('Contact', 'create', $params);
-        if(_spcivipush_check_result($merge_contact_results, 'contacten', 'create', $params, $debug_info)) {
-          unset($params['id']);
-          $merged_data['name'] = array(
-            'original' => $contact['display_name'],
-            'new' => implode(' ', $params),
-          );
-        }
-        else {
-          return FALSE;
+          else {
+            // No new name written, create action to check new name.
+            $merged_data['name'] = array(
+              'original' => $contact['display_name'],
+              'new' => implode(' ', array($new_first, $new_middle, $new_last)),
+              'changed' => FALSE,
+            );
+          }
         }
       }
 
@@ -894,28 +919,37 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
       if (!empty($merged_data)) {
         $text = '<p>Bron: ' . $source . '</p>';
         if (!empty($merged_data['name'])) {
-          $text .= '<p>De naam van het contact is gewijzigd van "' . $merged_data['name']['original'] . '" naar "' . check_plain($merged_data['name']['new']) . '".</p>';
+          if ($merged_data['name']['changed']) {
+            $text .= '<p>De naam van het contact is gewijzigd van "' . $merged_data['name']['original'] . '" naar "' . check_plain($merged_data['name']['new']) . '".</p>';
+          }
+          else {
+            $text .= '<p>Er is een naamwijziging doorgegeven van "' . $merged_data['name']['original'] . '" naar "' . check_plain($merged_data['name']['new']) . '". Deze wijziging is nog niet doorgevoerd.</p>';
+          }
         }
         if (
           !empty($merged_data['email']) ||
           !empty($merged_data['phone']) ||
           !empty($merged_data['address'])
         ) {
-          $text .= "<p>De volgende gegevens zijn toegevoegd:<br/><br/>";
+          $text .= "<p>De volgende gegevens zijn toegevoegd:</p>";
           if (!empty($merged_data['email'])) {
-            $text .= 'e-mailadres' . $merged_data['email']['primary_text'] . ': ' . check_plain($merged_data['email']['email']) . "<br/>";
+            $text .= '<p>e-mailadres' . $merged_data['email']['primary_text'] . ': ' . check_plain($merged_data['email']['email']) . "</p>";
           }
           if (!empty($merged_data['phone'])) {
-            $text .= 'telefoonnummer' . $merged_data['phone']['primary_text'] . ': ' . check_plain($merged_data['phone']['phone']) . "<br/>";
+            $text .= '<p>telefoonnummer' . $merged_data['phone']['primary_text'] . ': ' . check_plain($merged_data['phone']['phone']) . "</p>";
           }
           if (!empty($merged_data['address'])) {
-            $text .= 'adres' . $merged_data['address']['primary_text'] . ':' . "<br/>";
+            $text .= '<p>adres' . $merged_data['address']['primary_text'] . ':<br/>';
             unset($merged_data['address']['primary_text']);
             foreach ($merged_data['address'] as $value) {
               $text .= '- ' . check_plain($value) . "<br/>";
             }
+            $text .= '</p>';
           }
         }
+        // Check if spbellen module exists, if so, get caller data.
+        $caller_text = spcivipush_get_caller_text($debug_info);
+        $text .= $caller_text;
         spcivipush_create_activity($contact_id, 'Wijziging contact via website', 'Completed', 'Wijziging gegevens contact', $text, $debug_info);
         spcivipush_create_activity($contact_id, 'Controle wijziging contact via website', 'Scheduled', 'Contact gegevens zijn gewijzigd', $text, $debug_info);
         drupal_set_message('Contactinformatie in CiviCRM samengevoegd met bestaand contact: ' . $contact_id);
@@ -1020,4 +1054,30 @@ function spcivipush_create_activity($contact_id, $activity_type, $status, $subje
     }                                                                                               
   }                                                                                                 
   return FALSE;
+}
+
+
+function spcivipush_get_caller_text($debug_info) {
+  if (is_object($debug_info)) {
+    if (isset($debug_info->sid)) {
+      if (!empty($debug_info->sid)) {
+        if (db_table_exists('spbellen_action') && db_table_exists('spbellen_caller')) {
+          $sid = $debug_info->sid;
+          $sql = 'SELECT * FROM {spbellen}_action ac INNER JOIN {spbellen_caller} ca ON ac.caller_id = ca.caller_id INNER JOIN users us ON ca.caller_id = us.uid WHERE webform_submission_id = :sid';
+          $query = db_query($sql, array(':sid' => $sid)); 
+          $result = $query->fetchAssoc();
+          if (!empty($result)) {
+            $caller_text = '';
+            $caller_text .= '<p>Gegevens beller:<br/>';
+            $caller_text .= 'Naam: ' . check_plain($result['display_name']) . '<br/>';
+            $caller_text .= 'Email: ' . check_plain($result['mail']) . '<br/>';
+            $caller_text .= 'Telefoon: ' . check_plain($result['phone']) . '<br/>';
+            $caller_text .= 'Afdeling: ' . check_plain($result['afdeling']) . '<br/>';
+            $caller_text .= '</p>';
+          }
+          return $caller_text;
+        }
+      }
+    }
+  }
 }
