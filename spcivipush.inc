@@ -700,6 +700,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
         }
         $merge_contact_results = $spcivi->api('Contact', 'create', $params);
         if(_spcivipush_check_result($merge_contact_results, 'contacten', 'create', $params, $debug_info)) {
+          unset($params['id']);
           $merged_data['name'] = array(
             'original' => $contact['display_name'],
             'new' => implode(' ', $params),
@@ -739,7 +740,10 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
           );
           $create_email_result = $spcivi->api('Email', 'create', $params);
           if (_spcivipush_check_result($create_email_result, 'een e-mailadres', 'create', $params, $debug_info)) {
-            $merged_data['email'] = $data['email'];
+            $merged_data['email'] = array(
+              'email' => $data['email'],
+              'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair)',
+            );
           }
           else {
             return FALSE;
@@ -783,7 +787,10 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
           );
           $create_phone_result = $spcivi->api('Phone', 'create', $params);
           if(_spcivipush_check_result($create_phone_result, 'een telefoonnummer', 'create', $params, $debug_info)) {
-            $merged_data['phone'] = $data['telephone'];
+            $merged_data['phone'] = array(
+              'phone' => $data['telephone'],
+              'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair)',
+            );
           }
           else {
             return FALSE;
@@ -875,6 +882,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
                 foreach ($address_merge_fields as $key => $value) {
                   $merged_data['address'][$key] = $value;
                 };
+                $merged_data['address']['primary_text'] = $primary ? ' primair' : ' (nog niet ingesteld als primair)';
               }
             }
             else {
@@ -884,25 +892,32 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
         }
       }
       if (!empty($merged_data)) {
-        $text = '';
+        $text = '<p>Bron: ' . $source . '</p>';
         if (!empty($merged_data['name'])) {
-          $text .= 'De naam van het contact is gewijzigd van "' . $merged_data['name']['original'] . '" naar "' . check_plain($merged_data['name']['new']) . '".<br/><br/>';
+          $text .= '<p>De naam van het contact is gewijzigd van "' . $merged_data['name']['original'] . '" naar "' . check_plain($merged_data['name']['new']) . '".</p>';
         }
-        $text .= "De volgende gegevens zijn toegevoegd:<br/>";
-        if (!empty($merged_data['email'])) {
-          $text .= 'e-mailadres: ' . check_plain($merged_data['email']) . "<br/>";
-        }
-        if (!empty($merged_data['phone'])) {
-          $text .= 'telefoonnummer: ' . check_plain($merged_data['phone']) . "<br/>";
-        }
-        if (!empty($merged_data['address'])) {
-          $text .= 'adres:' . "<br/>";
-          foreach ($merged_data['address'] as $value) {
-            $text .= '  ' . check_plain($value) . "<br/>";
+        if (
+          !empty($merged_data['email']) ||
+          !empty($merged_data['phone']) ||
+          !empty($merged_data['address'])
+        ) {
+          $text .= "<p>De volgende gegevens zijn toegevoegd:<br/><br/>";
+          if (!empty($merged_data['email'])) {
+            $text .= 'e-mailadres' . $merged_data['email']['primary_text'] . ': ' . check_plain($merged_data['email']['email']) . "<br/>";
+          }
+          if (!empty($merged_data['phone'])) {
+            $text .= 'telefoonnummer' . $merged_data['phone']['primary_text'] . ': ' . check_plain($merged_data['phone']['phone']) . "<br/>";
+          }
+          if (!empty($merged_data['address'])) {
+            $text .= 'adres' . $merged_data['address']['primary_text'] . ':' . "<br/>";
+            unset($merged_data['address']['primary_text']);
+            foreach ($merged_data['address'] as $value) {
+              $text .= '- ' . check_plain($value) . "<br/>";
+            }
           }
         }
-        spcivipush_create_activity($contact_id, 'Wijziging contactgegevens via website', 'Completed', 'Bron: ' . $source, $text, $debug_info);
-        spcivipush_create_activity($contact_id, 'Controle wijziging contactgegevens via website', 'Scheduled', 'Bron: ' . $source, $text, $debug_info);
+        spcivipush_create_activity($contact_id, 'Wijziging contact via website', 'Completed', 'Wijziging gegevens contact', $text, $debug_info);
+        spcivipush_create_activity($contact_id, 'Controle wijziging contact via website', 'Scheduled', 'Contact gegevens zijn gewijzigd', $text, $debug_info);
         drupal_set_message('Contactinformatie in CiviCRM samengevoegd met bestaand contact: ' . $contact_id);
         watchdog('spcivipush', 'Contactinformatie in CiviCRM samengevoegd met bestaand contact: ' . $contact_id);
       }
@@ -994,7 +1009,7 @@ function spcivipush_create_activity($contact_id, $activity_type, $status, $subje
   $params = array( 
     'activity_type_id' => $activity_type,
     'subject' => $subject,
-    'source_contact_id' => $contact_id,
+    'target_id' => $contact_id,
     'details' => $text,
     'status_id' => $status,
   );
