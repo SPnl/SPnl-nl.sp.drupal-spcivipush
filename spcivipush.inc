@@ -237,22 +237,22 @@ function spcivipush_valid_contact_id($contact_id) {
 }
 
 function spcivipush_valid_name($name) {
-  $name = trim($name);
+  $name = trim(preg_replace('!\s+!', ' ', $name));
   if (!empty($name)) return $name;
 }
 
 function spcivipush_valid_first_name($first_name) {
-  $first_name = trim($first_name);
+  $first_name = trim(preg_replace('!\s+!', ' ', $first_name));
   if (!empty($first_name)) return $first_name;
 }
 
 function spcivipush_valid_middle_name($middle_name) {
-  $middle_name = trim($middle_name);
+  $middle_name = trim(preg_replace('!\s+!', ' ', $middle_name));
   if (!empty($middle_name)) return $middle_name;
 }
 
 function spcivipush_valid_last_name($last_name) {
-  $last_name = trim($last_name);
+  $last_name = trim(preg_replace('!\s+!', ' ', $last_name));
   if (!empty($last_name)) return $last_name;
 }
 function spcivipush_valid_email($email) {
@@ -682,6 +682,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
         $new_middle = empty($data['middle_name']) ? '' : $data['middle_name'];
         $new_last = empty($data['last_name']) ? '' : $data['last_name'];
         $old_name = empty($contact['display_name']) ? '' : $contact['display_name'];
+        $old_name = trim(preg_replace('!\s+!', ' ', $old_name));
         $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array($new_first, $new_middle, $new_last))));
         $new_name = !empty($new_name) ? $new_name : $data['name'];
         $new_name = !empty($new_name) ? $new_name : '';
@@ -944,7 +945,9 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
         // Check if spbellen module exists, if so, get caller data.
         $caller_text = spcivipush_get_caller_text($debug_info);
         $text .= $caller_text;
-        spcivipush_create_activity($contact_id, 'Wijziging contact via website', 'Completed', 'Wijziging gegevens contact', $text, $debug_info);
+        if ($overwrite) {
+          spcivipush_create_activity($contact_id, 'Wijziging contact via website', 'Completed', 'Wijziging gegevens contact', $text, $debug_info);
+        }
         spcivipush_create_activity($contact_id, 'Controle wijziging contact via website', 'Scheduled', 'Contact gegevens zijn gewijzigd', $text, $debug_info);
         drupal_set_message('Contactinformatie in CiviCRM samengevoegd met bestaand contact: ' . $contact_id);
         watchdog('spcivipush', 'Contactinformatie in CiviCRM samengevoegd met bestaand contact: ' . $contact_id);
