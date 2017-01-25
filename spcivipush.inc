@@ -926,6 +926,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
           !empty($merged_data['phone']) ||
           !empty($merged_data['address'])
         ) {
+          $data_added = TRUE;
           $text .= "<p>De volgende gegevens zijn toegevoegd:</p>";
           if (!empty($merged_data['email'])) {
             $text .= '<p>e-mailadres' . $merged_data['email']['primary_text'] . ': ' . check_plain($merged_data['email']['email']) . "</p>";
@@ -942,10 +943,13 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
             $text .= '</p>';
           }
         }
+        else {
+          $data_added = FALSE;
+        }
         // Check if spbellen module exists, if so, get caller data.
         $caller_text = spcivipush_get_caller_text($debug_info);
         $text .= $caller_text;
-        if ($overwrite) {
+        if ($overwrite || $data_added) {
           spcivipush_create_activity($contact_id, 'Wijziging contact via website', 'Completed', 'Wijziging gegevens contact', $text, $debug_info);
         }
         spcivipush_create_activity($contact_id, 'Controle wijziging contact via website', 'Scheduled', 'Contact gegevens zijn gewijzigd', $text, $debug_info);
