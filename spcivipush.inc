@@ -1063,6 +1063,7 @@ function spcivipush_get_caller_text($debug_info) {
     if (isset($debug_info->sid)) {
       if (!empty($debug_info->sid)) {
         if (db_table_exists('spbellen_action') && db_table_exists('spbellen_caller')) {
+          $caller_text = '';
           $sid = $debug_info->sid;
           $sql = 'SELECT * FROM {spbellen}_action ac INNER JOIN {spbellen_caller} ca ON ac.caller_id = ca.caller_id INNER JOIN users us ON ca.caller_id = us.uid WHERE webform_submission_id = :sid';
           $query = db_query($sql, array(':sid' => $sid)); 
