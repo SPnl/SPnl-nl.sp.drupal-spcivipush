@@ -35,7 +35,6 @@ function spcivipush_parse_data($data) {
       }
     }
   }
-  $validated_data['overwrite'] = empty($data['overwrite']) ? FALSE : TRUE;
   return $validated_data;
 }
 
@@ -74,7 +73,7 @@ function spcivipush_check_submission_sufficient($data) {
   return FALSE;
 }
 
-function spcivipush_sync_contact($data, $groups, $debug_info, $source) {
+function spcivipush_sync_contact($data, $groups, $debug_info) {
   // Find similar existing contacts in civi.
   $same_contacts = spcivipush_find_same_contacts($data, $debug_info);
   if ($same_contacts !== FALSE) {
@@ -86,11 +85,11 @@ function spcivipush_sync_contact($data, $groups, $debug_info, $source) {
         return 'contact id not found';
       }
       else {
-        $contact_id = spcivipush_add_contact($data, $debug_info, $source);
+        $contact_id = spcivipush_add_contact($data, $debug_info);
       }
     }
     elseif (count($same_contacts) > 1) {
-      $contact_id = spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source);
+      $contact_id = spcivipush_merge_contacts($data, $same_contacts, $debug_info);
       $merge_email = variable_get('spcivipush_merge_contact_email_address', '');
       if (!empty($merge_email)) {
         // Send mail for manually merging.
@@ -113,7 +112,7 @@ function spcivipush_sync_contact($data, $groups, $debug_info, $source) {
       }
     }
     else {
-      $contact_id = spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source);
+      $contact_id = spcivipush_merge_contacts($data, $same_contacts, $debug_info);
     }
     if (!empty($contact_id)) {
       if (!empty($groups)) {
@@ -146,6 +145,10 @@ function spcivipush_get_data_names() {
     'street_and_number' => 'straat en huisnummer',
     'postal_code' => 'postcode',
     'locality' => 'plaats',
+    'note' => 'notitie',
+    'overwrite' => 'overschrijven',
+    'author' => 'auteur',
+    'source' => 'bron',
   );
   return $data_names;
 }
@@ -307,17 +310,34 @@ function spcivipush_valid_street_and_number($street_and_number) {
   if (!empty($street_and_number)) return $street_and_number;
 }
 
+function spcivipush_valid_postal_code($postal_code) {
+  $postal_code = trim($postal_code);
+  if (preg_match('@^([1-9][0-9]{3})\s?([a-zA-Z]{2})$@', $postal_code, $matches)) {
+    return $matches[1] . ' ' . strtoupper($matches[2]);
+  }
+}
+
 function spcivipush_valid_locality($locality) {
   $locality = trim($locality);
   $locality = ucfirst($locality);
   if (!empty($locality)) return $locality;
 }
 
-function spcivipush_valid_postal_code($postal_code) {
-  $postal_code = trim($postal_code);
-  if (preg_match('@^([1-9][0-9]{3})\s?([a-zA-Z]{2})$@', $postal_code, $matches)) {
-    return $matches[1] . ' ' . strtoupper($matches[2]);
-  }
+function spcivipush_valid_note($note) {
+  return trim($note);
+}
+
+function spcivipush_valid_overwrite($overwrite) {
+  $overwrite = empty($overwrite) ? FALSE : TRUE;
+  return $overwrite;
+}
+
+function spcivipush_valid_author($author) {
+  return trim($author);
+}
+
+function spcivipush_valid_source($source) {
+  return trim($source);
 }
 
 
@@ -498,7 +518,7 @@ function spcivipush_find_same_contacts($data, $debug_info) {
   return $same_contacts;
 }
 
-function spcivipush_add_contact($data, $debug_info, $source) {
+function spcivipush_add_contact($data, $debug_info) {
   global $base_url;
   $spcivi = \SPCivi::getInstance();
   set_time_limit(60);
@@ -515,7 +535,6 @@ function spcivipush_add_contact($data, $debug_info, $source) {
   );
   $params = array(
     'contact_type' => 'Individual',
-    'contact_source' => $source,
   );
   foreach ($autosync as $key => $civikey) {
     if (!empty($data[$key])) {
@@ -600,6 +619,12 @@ function spcivipush_add_contact($data, $debug_info, $source) {
         }
       }
     }
+
+    // Add notes.
+    if (spcivipush_add_notes($contact_id, $data, $debug_info) === FALSE) {
+      return FALSE;
+    }
+
     // If available set unverified tag.
     $tag_id = variable_get('spcivipush_unverified_tag', FALSE);
     if (!empty($tag_id)) {
@@ -648,7 +673,7 @@ function spcivipush_check_address_manually($street_and_number, $contact_id) {
   }
 }
 
-function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) {
+function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
   if (!empty($data['overwrite']) && !empty($data['contact_id']) && spcivipush_overwrite_location()) {
     $overwrite = TRUE;
   }
@@ -911,8 +936,15 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info, $source) 
           }
         }
       }
+
+      // Add notes.
+      if (spcivipush_add_notes($contact_id, $data, $debug_info) === FALSE) {
+        return FALSE;
+      }
+
+      // Create activities.
       if (!empty($merged_data)) {
-        $text = '<p>Bron: ' . $source . '</p>';
+        $text = '<p>Bron: ' . $data['source'] . '</p>';
         if (!empty($merged_data['name'])) {
           if ($merged_data['name']['changed']) {
             $text .= '<p>De naam van het contact is gewijzigd van "' . $merged_data['name']['original'] . '" naar "' . check_plain($merged_data['name']['new']) . '".</p>';
@@ -1081,5 +1113,67 @@ function spcivipush_get_caller_text($debug_info) {
         }
       }
     }
+  }
+}
+
+
+function spcivipush_add_notes($contact_id, $data, $debug_info) {
+  // If available add note.
+  if (!empty($data['note'])) {
+
+    $spcivi = \SPCivi::getInstance();
+    set_time_limit(60);
+
+    // Get field ids.
+    $content_field_id = variable_get('spcivipush_note_content_field');
+    $use_field_id = variable_get('spcivipush_note_use_field');
+    $author_field_id = variable_get('spcivipush_note_author_field');
+    $date_field_id = variable_get('spcivipush_note_date_field');
+    $source_field_id = variable_get('spcivipush_note_source_field');
+
+    // Get existing custom fields.
+    $params = array(
+      'sequential' => 1,
+      'entity_id' => "761666",
+    );
+    $custom_fields_result = $spcivi->api('CustomValue', 'get', $params);
+    if (!_spcivipush_check_result($custom_fields_result, 'velden', 'get', $params, $debug_info)) {
+      return FALSE;
+    }
+    foreach ($custom_fields_result['values'] as $field_values) {
+      if ($field_values['id'] === $source_field_id) {
+        foreach ($field_values as $key => $value) {
+          if( filter_var($key, FILTER_VALIDATE_INT) ){
+            if ($value === $data['source']) {
+              // Note was already added.
+              watchdog('spcivipush', 'Notitie bestaat reeds.');
+              return;
+            }
+          }
+        }
+      }
+    }
+
+    $content_field_id = variable_get('spcivipush_note_content_field');
+    $use_field_id = variable_get('spcivipush_note_use_field');
+    $author_field_id = variable_get('spcivipush_note_author_field');
+    $date_field_id = variable_get('spcivipush_note_date_field');
+    $source_field_id = variable_get('spcivipush_note_source_field');
+
+    $date = format_date(time(), 'custom', 'Ymd', date_default_timezone_get());
+    $params = array(
+      'contact_id' => $contact_id,
+      'entity_id' => $contact_id,
+      'custom_' . $content_field_id => $data['note'],
+      'custom_' . $use_field_id => array('telefoongesprek'),
+      'custom_' . $author_field_id => 'Test',
+      'custom_' . $date_field_id => $date,
+      'custom_' . $source_field_id => $data['source'],
+    );
+    $create_note_result = $spcivi->api('CustomValue', 'create', $params);
+    if (!_spcivipush_check_result($create_note_result, 'een notitie', 'create', $params, $debug_info)) {
+      return FALSE;
+    }
+    watchdog('spcivipush', 'Notitie toegevoegd.');
   }
 }
