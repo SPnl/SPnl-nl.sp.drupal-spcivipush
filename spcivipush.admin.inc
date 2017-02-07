@@ -30,7 +30,7 @@ function spcivipush_settings_form($form, &$form_state) {
 
   $form['spcivipush_note_settings'] = array(
     '#type' => 'fieldset',
-    '#title' => 'Notitie veld instellingen',
+    '#title' => 'CiviCRM notitie velden',
   );
 
   $form['spcivipush_note_settings']['spcivipush_note_content_field'] = array(

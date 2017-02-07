@@ -150,7 +150,8 @@ function spcivipush_get_data_names() {
     'street_and_number' => 'straat en huisnummer',
     'postal_code' => 'postcode',
     'locality' => 'plaats',
-    'note' => 'notitie',
+    'note_content' => 'notitie inhoud',
+    'note_use' => 'gebruik notitie',
     'overwrite' => 'overschrijven',
     'author' => 'auteur',
     'source' => 'bron',
@@ -329,8 +330,12 @@ function spcivipush_valid_locality($locality) {
   if (!empty($locality)) return $locality;
 }
 
-function spcivipush_valid_note($note) {
-  return trim($note);
+function spcivipush_valid_note_content($note_content) {
+  return $note_content;
+}
+
+function spcivipush_valid_note_use($note_use) {
+  return $note_use;
 }
 
 function spcivipush_valid_overwrite($overwrite) {
@@ -1129,7 +1134,7 @@ function spcivipush_get_caller_text($debug_info) {
 
 function spcivipush_add_notes($contact_id, $data, $debug_info) {
   // If available add note.
-  if (!empty($data['note'])) {
+  if (!empty($data['note_content'])) {
 
     $spcivi = \SPCivi::getInstance();
     set_time_limit(60);
@@ -1164,19 +1169,13 @@ function spcivipush_add_notes($contact_id, $data, $debug_info) {
       }
     }
 
-    $content_field_id = variable_get('spcivipush_note_content_field');
-    $use_field_id = variable_get('spcivipush_note_use_field');
-    $author_field_id = variable_get('spcivipush_note_author_field');
-    $date_field_id = variable_get('spcivipush_note_date_field');
-    $source_field_id = variable_get('spcivipush_note_source_field');
-
     $date = format_date(time(), 'custom', 'Ymd', date_default_timezone_get());
     $params = array(
       'contact_id' => $contact_id,
       'entity_id' => $contact_id,
-      'custom_' . $content_field_id => $data['note'],
-      'custom_' . $use_field_id => array('telefoongesprek'),
-      'custom_' . $author_field_id => 'Test',
+      'custom_' . $content_field_id => implode(PHP_EOL, $data['note_content']),
+      'custom_' . $use_field_id => $data['note_use'],
+      'custom_' . $author_field_id => $data['author'],
       'custom_' . $date_field_id => $date,
       'custom_' . $source_field_id => $data['source'],
     );
