@@ -9,7 +9,12 @@ function spcivipush_parse_data($data) {
     if (isset($data[$key])) {
       $validated_value = call_user_func('spcivipush_valid_' . $key, $data[$key]);
       if (!empty($validated_value)) {
-        $validated_data[$key] = substr($validated_value, 0, 64);
+        if (is_string($validated_value)) {
+          $validated_data[$key] = substr($validated_value, 0, 64);
+        }
+        else {
+          $validated_data[$key] = $validated_value;
+        }
       }
     }
   }
@@ -73,7 +78,7 @@ function spcivipush_check_submission_sufficient($data) {
   return FALSE;
 }
 
-function spcivipush_sync_contact($data, $groups, $debug_info) {
+function spcivipush_sync_contact($data, $debug_info) {
   // Find similar existing contacts in civi.
   $same_contacts = spcivipush_find_same_contacts($data, $debug_info);
   if ($same_contacts !== FALSE) {
@@ -115,9 +120,9 @@ function spcivipush_sync_contact($data, $groups, $debug_info) {
       $contact_id = spcivipush_merge_contacts($data, $same_contacts, $debug_info);
     }
     if (!empty($contact_id)) {
-      if (!empty($groups)) {
+      if (!empty($data['groups'])) {
         // Add contact to groups.
-        $result = spcivipush_contact_add_groups($contact_id, $groups, $debug_info);
+        $result = spcivipush_contact_add_groups($contact_id, $data['groups'], $debug_info);
         if (!empty($result)) {
           return $contact_id;
         }
@@ -149,6 +154,7 @@ function spcivipush_get_data_names() {
     'overwrite' => 'overschrijven',
     'author' => 'auteur',
     'source' => 'bron',
+    'groups' => 'groepen',
   );
   return $data_names;
 }
@@ -338,6 +344,10 @@ function spcivipush_valid_author($author) {
 
 function spcivipush_valid_source($source) {
   return trim($source);
+}
+
+function spcivipush_valid_groups($groups) {
+  return $groups;
 }
 
 

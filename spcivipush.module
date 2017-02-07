@@ -31,19 +31,19 @@ function spcivipush_init() {
  *     - overwrite
  *     - author
  *     - source
+ *     - groups: array(group_id_1, group_id_2, etc.)
  *
- * groups: array(group_id_1, group_id_2, etc.)
  *
  * debug_info: variable content shown in logs.
  *
  */
-function spcivipush_push_contact($data, $groups, $debug_info) {
+function spcivipush_push_contact($data, $debug_info) {
   // Cleanup data.
   $data = spcivipush_parse_data($data);
   // Check if submission contains data nescesarry to create contact.
   if (spcivipush_check_submission_sufficient($data)) {
     // Sync contact.
-    $contact_id = spcivipush_sync_contact($data, $groups, $debug_info);
+    $contact_id = spcivipush_sync_contact($data, $debug_info);
     if (!empty($contact_id)) {
       return $contact_id;
     }
