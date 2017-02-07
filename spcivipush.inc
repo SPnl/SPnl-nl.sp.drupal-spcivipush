@@ -1184,5 +1184,6 @@ function spcivipush_add_notes($contact_id, $data, $debug_info) {
       return FALSE;
     }
     watchdog('spcivipush', 'Notitie toegevoegd.');
+    drupal_set_message('Notitie toegevoegd.');
   }
 }
