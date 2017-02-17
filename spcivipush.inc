@@ -1170,20 +1170,23 @@ function spcivipush_add_notes($contact_id, $data, $debug_info) {
     }
 
     $date = format_date(time(), 'custom', 'Ymd', date_default_timezone_get());
-    $params = array(
-      'contact_id' => $contact_id,
-      'entity_id' => $contact_id,
-      'custom_' . $content_field_id => implode(PHP_EOL, $data['note_content']),
-      'custom_' . $use_field_id => $data['note_use'],
-      'custom_' . $author_field_id => $data['author'],
-      'custom_' . $date_field_id => $date,
-      'custom_' . $source_field_id => $data['source'],
-    );
-    $create_note_result = $spcivi->api('CustomValue', 'create', $params);
-    if (!_spcivipush_check_result($create_note_result, 'een notitie', 'create', $params, $debug_info)) {
-      return FALSE;
+
+    foreach ($data['note_content'] as $content) {
+      $params = array(
+        'contact_id' => $contact_id,
+        'entity_id' => $contact_id,
+        'custom_' . $content_field_id => $content,
+        'custom_' . $use_field_id => $data['note_use'],
+        'custom_' . $author_field_id => $data['author'],
+        'custom_' . $date_field_id => $date,
+        'custom_' . $source_field_id => $data['source'],
+      );
+      $create_note_result = $spcivi->api('CustomValue', 'create', $params);
+      if (!_spcivipush_check_result($create_note_result, 'een notitie', 'create', $params, $debug_info)) {
+        return FALSE;
+      }
+      watchdog('spcivipush', 'Notitie toegevoegd.');
+      drupal_set_message('Notitie toegevoegd.');
     }
-    watchdog('spcivipush', 'Notitie toegevoegd.');
-    drupal_set_message('Notitie toegevoegd.');
   }
 }
