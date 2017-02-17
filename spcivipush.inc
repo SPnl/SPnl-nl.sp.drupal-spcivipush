@@ -1144,7 +1144,7 @@ function spcivipush_add_notes($contact_id, $data, $debug_info) {
     // Get existing custom fields.
     $params = array(
       'sequential' => 1,
-      'entity_id' => "761666",
+      'entity_id' => $contact_id,
     );
     $custom_fields_result = $spcivi->api('CustomValue', 'get', $params);
     if (!_spcivipush_check_result($custom_fields_result, 'velden', 'get', $params, $debug_info)) {
