@@ -25,9 +25,20 @@ function spcivipush_init() {
  *     - street_and_number
  *     - postal_code
  *     - locality
- *     - note
- *         content: array(note1, note2, etc.)
- *         use
+ *     - notes: array(
+ *         array(
+ *           note_content,
+ *           note_use: array(
+ *             intern
+ *           )
+ *         )
+ *         array(
+ *           note_content
+ *           note_use: array(
+ *           )
+ *         )
+ *         ...
+ *       )
  *     - overwrite
  *     - author
  *     - source

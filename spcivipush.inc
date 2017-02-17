@@ -150,8 +150,7 @@ function spcivipush_get_data_names() {
     'street_and_number' => 'straat en huisnummer',
     'postal_code' => 'postcode',
     'locality' => 'plaats',
-    'note_content' => 'notitie inhoud',
-    'note_use' => 'gebruik notitie',
+    'notes' => 'notities',
     'overwrite' => 'overschrijven',
     'author' => 'auteur',
     'source' => 'bron',
@@ -330,12 +329,8 @@ function spcivipush_valid_locality($locality) {
   if (!empty($locality)) return $locality;
 }
 
-function spcivipush_valid_note_content($note_content) {
-  return $note_content;
-}
-
-function spcivipush_valid_note_use($note_use) {
-  return $note_use;
+function spcivipush_valid_notes($notes) {
+  return $notes;
 }
 
 function spcivipush_valid_overwrite($overwrite) {
@@ -1134,7 +1129,7 @@ function spcivipush_get_caller_text($debug_info) {
 
 function spcivipush_add_notes($contact_id, $data, $debug_info) {
   // If available add note.
-  if (!empty($data['note_content'])) {
+  if (!empty($data['notes'])) {
 
     $spcivi = \SPCivi::getInstance();
     set_time_limit(60);
@@ -1171,22 +1166,24 @@ function spcivipush_add_notes($contact_id, $data, $debug_info) {
 
     $date = format_date(time(), 'custom', 'Ymd', date_default_timezone_get());
 
-    foreach ($data['note_content'] as $content) {
-      $params = array(
-        'contact_id' => $contact_id,
-        'entity_id' => $contact_id,
-        'custom_' . $content_field_id => $content,
-        'custom_' . $use_field_id => $data['note_use'],
-        'custom_' . $author_field_id => $data['author'],
-        'custom_' . $date_field_id => $date,
-        'custom_' . $source_field_id => $data['source'],
-      );
-      $create_note_result = $spcivi->api('CustomValue', 'create', $params);
-      if (!_spcivipush_check_result($create_note_result, 'een notitie', 'create', $params, $debug_info)) {
-        return FALSE;
+    foreach ($data['notes'] as $note_data) {
+      if (!empty(trim($note_data['note_content']))) {
+        $params = array(
+          'contact_id' => $contact_id,
+          'entity_id' => $contact_id,
+          'custom_' . $content_field_id => $note_data['note_content'],
+          'custom_' . $use_field_id => $note_data['note_use'],
+          'custom_' . $author_field_id => $data['author'],
+          'custom_' . $date_field_id => $date,
+          'custom_' . $source_field_id => $data['source'],
+        );
+        $create_note_result = $spcivi->api('CustomValue', 'create', $params);
+        if (!_spcivipush_check_result($create_note_result, 'een notitie', 'create', $params, $debug_info)) {
+          return FALSE;
+        }
+        watchdog('spcivipush', 'Notitie toegevoegd.');
+        drupal_set_message('Notitie toegevoegd.');
       }
-      watchdog('spcivipush', 'Notitie toegevoegd.');
-      drupal_set_message('Notitie toegevoegd.');
     }
   }
 }
