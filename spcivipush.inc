@@ -380,6 +380,23 @@ function spcivipush_find_same_contacts($data, $debug_info) {
     }
   }
 
+  // Find same contacts based on source (webform).
+  if (preg_match('/^Form: .*\(id: [0-9]+, sid: [0-9]+,[^)]+\)$/', $data['source'])) {
+    $params = array(
+      'option.limit' => 1,
+      'contact_is_deleted' => 0,
+      'contact_source' => $data['source'],
+    );
+    $contact_results = $spcivi->api('Contact', 'get', $params);
+    if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
+      if (!empty($contact_results['values'])) {
+        $contact_id = $contact_results['values']['contact_id'];
+        $same_contacts[$contact_id] = $contact_id;
+        return $same_contacts;
+      }
+    }
+  }
+
   // Find same contacts based on mobile phone.
   if (
     isset($data['telephone']) &&
