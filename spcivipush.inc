@@ -1106,6 +1106,7 @@ function spcivipush_create_activity($contact_id, $activity_type, $status, $subje
     'target_id' => $contact_id,
     'details' => $text,
     'status_id' => $status,
+    'priority_id' => 2,
   );
   $activity_results = $spcivi->api('Activity', 'create', $params);
   if (_spcivipush_check_result($activity_results, 'een activiteit', 'create', $params, $debug_info)) {     
