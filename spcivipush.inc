@@ -390,9 +390,12 @@ function spcivipush_find_same_contacts($data, $debug_info) {
     $contact_results = $spcivi->api('Contact', 'get', $params);
     if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
       if (!empty($contact_results['values'])) {
-        $contact_id = $contact_results['values']['contact_id'];
-        $same_contacts[$contact_id] = $contact_id;
-        return $same_contacts;
+        $contact_result = array_shift($contact_results['values']);
+        if (!empty($contact_result['contact_id'])) {
+          $contact_id = $contact_result['contact_id'];
+          $same_contacts[$contact_id] = $contact_id;
+          return $same_contacts;
+        }
       }
     }
   }
