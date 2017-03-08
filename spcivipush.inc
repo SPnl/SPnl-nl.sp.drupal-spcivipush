@@ -875,6 +875,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
 
       // Merge address data if no address with same house number or postal code exists.
       if (!empty($data['house_number']) || !empty($data['postal_code']) || (!empty($data['street_and_number']) && !empty($data['locality']))) {
+
         // Check if address with same house number exists.
         if (!empty($data['house_number'])) {
           $params = array(
@@ -886,7 +887,9 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
             return FALSE;
           }
         }
+
         // Check if address with same postal code exists.
+        $existing_postal_code_address_found = FALSE;
         if (!empty($data['postal_code'])) {
           $params = array(
             'contact_id' => $contact_id,
@@ -896,7 +899,19 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           if(!_spcivipush_check_result($get_postal_code_address_result, 'een adres', 'get', $params, $debug_info)) {
             return FALSE;
           }
+          $postal_code_result_with_house_number = FALSE;
+          if (!empty($get_postal_code_address_result['values'])) {
+            foreach ($get_postal_code_address_result['values'] as $address_data) {
+              if (!empty($address_data['street_number'])) {
+                $postal_code_result_with_house_number = TRUE;
+              }
+            }
+            if ($postal_code_result_with_house_number || empty($data['house_number'])) {
+              $existing_postal_code_address_found = TRUE;
+            }
+          }
         }
+
         // Check if address with same street and number exists.
         if (!empty($data['street_and_number'])) {
           $params = array(
@@ -911,8 +926,8 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
 
         if (
             empty($get_street_number_address_result['values']) &&
-            empty($get_postal_code_address_result['values']) &&
-            empty($get_postal_code_address_result['values'])
+            empty($get_street_address_result['values']) &&
+            $existing_postal_code_address_found === FALSE
         ) {
           if (empty($contact['address_id']) || $overwrite) {
             // Add primary address.
