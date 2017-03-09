@@ -800,7 +800,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
         if (!empty($get_emails_result) && empty($get_emails_result['values'])) {
           if (empty($contact['email']) || $overwrite) {
             $primary = 1;
-            $location_type_id = 3;
+            $location_type_id = 1;
           }
           else {
             $primary = 0;
@@ -906,7 +906,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
                 $postal_code_result_with_house_number = TRUE;
               }
             }
-            if ($postal_code_result_with_house_number || empty($data['house_number'])) {
+            if ($postal_code_result_with_house_number || (empty($data['house_number']) && empty($data['street_and_number']))) {
               $existing_postal_code_address_found = TRUE;
             }
           }
@@ -932,7 +932,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           if (empty($contact['address_id']) || $overwrite) {
             // Add primary address.
             $primary = 1;
-            $location_type_id = 3;
+            $location_type_id = 1;
           }
           else {
             $primary = 0;
