@@ -153,6 +153,7 @@ function spcivipush_get_data_names() {
     'notes' => 'notities',
     'overwrite' => 'overschrijven',
     'author' => 'auteur',
+    'remote_addr' => 'ip addres auteur',
     'source' => 'bron',
     'groups' => 'groepen',
   );
@@ -340,6 +341,10 @@ function spcivipush_valid_overwrite($overwrite) {
 
 function spcivipush_valid_author($author) {
   return trim($author);
+}
+
+function spcivipush_valid_remote_addr($remote_addr) {
+  return trim($remote_addr);
 }
 
 function spcivipush_valid_source($source) {
@@ -704,7 +709,7 @@ function spcivipush_check_address_manually($street_and_number, $contact_id) {
 }
 
 function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
-  if (!empty($data['overwrite']) && !empty($data['contact_id']) && spcivipush_overwrite_location()) {
+  if (!empty($data['overwrite']) && !empty($data['contact_id']) && spcivipush_overwrite_location($data)) {
     $overwrite = TRUE;
   }
   else {
@@ -1106,11 +1111,12 @@ function spcivipush_send_address_check_mail($params) {
   }
 }
 
-function spcivipush_overwrite_location() {
-  $ip_address = ip_address();
-  $location_ip = variable_get('spcivipush_overwrite_location_ip', FALSE);                              
-  if ($ip_address === $location_ip) {
-    return TRUE;
+function spcivipush_overwrite_location($data) {
+  if (!empty($data['remote_addr'])) {
+    $location_ip = variable_get('spcivipush_overwrite_location_ip', FALSE);                              
+    if ($data['remote_addr'] == $location_ip) {
+      return TRUE;
+    }
   }
   return FALSE;
 }
