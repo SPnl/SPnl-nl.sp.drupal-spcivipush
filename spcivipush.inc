@@ -272,7 +272,13 @@ function spcivipush_valid_email($email) {
 
 function spcivipush_valid_telephone($telephone) {
   if (!empty($telephone)) {
+    // Remove non numerical characters.
     $telephone = preg_replace('@[^0-9]@', '', $telephone);
+
+    // 612345678 => 012345678
+    if (strlen($telephone) === 9) {
+      $telephone = '0' . $telephone;
+    }
     // +31612345678 => 0649492174
     if (
       strlen($telephone) === 11 &&
