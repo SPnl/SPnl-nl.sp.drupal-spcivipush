@@ -825,7 +825,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           }
           else {
             $primary = 0;
-            $location_type_id = 4;
+            $location_type_id = 1;
           }
           // Add email.
           $params = array(
@@ -866,7 +866,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           }
           else {
             $primary = 0;
-            $location_type_id = 4;
+            $location_type_id = 1;
           }
           if (strpos($data['telephone'], '06') === 0) {
             $phone_type_id = 2;
@@ -957,7 +957,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           }
           else {
             $primary = 0;
-            $location_type_id = 4;
+            $location_type_id = 1;
           }
           $autosync = array(
             'street_and_number' => 'street_address',
