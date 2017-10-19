@@ -18,6 +18,7 @@ function spcivipush_parse_data($data) {
       }
     }
   }
+
   // If possible, split house number in house_number and addition.
   if (!empty($validated_data['house_number'])) {
     $split_house_number = spcivipush_split_house_number($validated_data['house_number']);
@@ -28,6 +29,23 @@ function spcivipush_parse_data($data) {
       }
     }
   }
+
+  // If possible, split street and number.
+  if (!empty($validated_data['street_and_number'])) {
+    $split_street_and_number = spcivipush_split_street_and_number($validated_data['street_and_number']);
+    if (!empty($split_street_and_number)) {
+      if (empty($validated_data['street']) && !empty($split_street_and_number[1])) {
+        $validated_data['street'] = $split_street_and_number[1];
+      }
+      if (empty($validated_data['house_number']) && !empty($split_street_and_number[2])) {
+        $validated_data['house_number'] = $split_street_and_number[2];
+      }
+      if (empty($validated_data['house_number_addition']) && !empty($split_street_and_number[3])) {
+        $validated_data['house_number_addition'] = $split_street_and_number[3];
+      }
+    }
+  }
+
   // If name item, then if possible, set first name, middle_name, and last name.
   if (!empty($validated_data['name'])) {
     // Check if name contains prepositon.
@@ -168,6 +186,24 @@ function spcivipush_split_house_number($house_number) {
     if (!empty($matches[2])) {
       return $matches;
     }
+  }
+  return FALSE;
+}
+
+function spcivipush_split_street_and_number($street_and_number) {
+  $matches = array();
+  // Street and number and addition.
+  $regex = "@^(.+)((?<![0-9])[0-9]+)([^0-9].*)$@";
+  if (!preg_match($regex, $street_and_number, $matches)) {
+    // Only street and number.
+    $regex = "@^(.+)((?<![0-9])[0-9]+)$@";
+    preg_match($regex, $street_and_number, $matches);
+  }
+  if (!empty($matches[2])) {
+    foreach($matches as $key => $match) {
+      $matches[$key] = trim($match);
+    }
+    return $matches;
   }
   return FALSE;
 }
@@ -894,71 +930,38 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
         }
       }
 
-      // Merge address data if no address with same house number or postal code exists.
-      if (!empty($data['house_number']) || !empty($data['postal_code']) || (!empty($data['street_and_number']) && !empty($data['locality']))) {
-
-        // Check if address with same house number exists.
-        if (!empty($data['house_number'])) {
+      // Merge address data.
+      if ($overwrite) {
+        // Check if sufficient address data.
+        if ((!empty($data['house_number']) && !empty($data['postal_code'])) || (!empty($data['street_and_number']) && !empty($data['locality']))) {
+          // Check contact home address already exists.
           $params = array(
             'contact_id' => $contact_id,
-            'street_number' => $data['house_number'],
+            'location_type_id' => 1,
           );
-          $get_street_number_address_result = $spcivi->api('Address', 'get', $params);
-          if(!_spcivipush_check_result($get_street_number_address_result, 'een adres', 'get', $params, $debug_info)) {
+          $get_home_address_result = $spcivi->api('Address', 'get', $params);
+          if(!_spcivipush_check_result($get_home_address_result, 'een adres', 'get', $params, $debug_info)) {
             return FALSE;
           }
-        }
-
-        // Check if address with same postal code exists.
-        $existing_postal_code_address_found = FALSE;
-        if (!empty($data['postal_code'])) {
-          $params = array(
-            'contact_id' => $contact_id,
-            'postal_code' => $data['postal_code'],
-          );
-          $get_postal_code_address_result = $spcivi->api('Address', 'get', $params);
-          if(!_spcivipush_check_result($get_postal_code_address_result, 'een adres', 'get', $params, $debug_info)) {
-            return FALSE;
-          }
-          $postal_code_result_with_house_number = FALSE;
-          if (!empty($get_postal_code_address_result['values'])) {
-            foreach ($get_postal_code_address_result['values'] as $address_data) {
-              if (!empty($address_data['street_number'])) {
-                $postal_code_result_with_house_number = TRUE;
+          if (!empty($get_home_address_result['values'])) {
+            // Existing home address found, set not home, not billing, not primary.
+            foreach ($get_home_address_result['values'] as $address_data) {
+              if ($address_data['location_type_id'] === 1 || $address_data['is_billing'] || $address_data['is_primary']) {
+                // Set not home, not billing, not primary.
+                $params = array(
+                  'id' => $address_data['id'],
+                  'location_type_id' => 4,
+                  'is_primary' => 0,
+                  'is_billing' => 0,
+                );
+                $create_address_result = $spcivi->api('Address', 'create', $params);
+                if(!_spcivipush_check_result($create_address_result, 'een adres', 'create', $params, $debug_info)) {
+                  return FALSE;
+                }
               }
             }
-            if ($postal_code_result_with_house_number || (empty($data['house_number']) && empty($data['street_and_number']))) {
-              $existing_postal_code_address_found = TRUE;
-            }
           }
-        }
-
-        // Check if address with same street and number exists.
-        if (!empty($data['street_and_number'])) {
-          $params = array(
-            'contact_id' => $contact_id,
-            'street_address' => $data['street_and_number'],
-          );
-          $get_street_address_result = $spcivi->api('Address', 'get', $params);
-          if(!_spcivipush_check_result($get_street_address_result, 'een adres', 'get', $params, $debug_info)) {
-            return FALSE;
-          }
-        }
-
-        if (
-            empty($get_street_number_address_result['values']) &&
-            empty($get_street_address_result['values']) &&
-            $existing_postal_code_address_found === FALSE
-        ) {
-          if (empty($contact['address_id']) || $overwrite) {
-            // Add primary address.
-            $primary = 1;
-            $location_type_id = 1;
-          }
-          else {
-            $primary = 0;
-            $location_type_id = 1;
-          }
+          // Add new address.
           $autosync = array(
             'street_and_number' => 'street_address',
             'street' => 'street_name',
@@ -969,8 +972,9 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           );
           $params = array(
             'contact_id' => $contact_id,
-            'location_type_id' => $location_type_id,
-            'is_primary' => $primary,
+            'location_type_id' => 1,
+            'is_primary' => 1,
+            'is_billing' => 1,
             'country_id' => 1152,
           );
           $address_data_found = FALSE;
@@ -984,20 +988,128 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           }
           if ($address_data_found) {
             $create_address_results = $spcivi->api('Address', 'create', $params);
-            if(_spcivipush_check_result($create_address_results, 'een adres', 'create', $params, $debug_info)) {
-              // If new address was added to existing one.
-              if (
-                !empty($create_address_results['values']) && 
-                !empty($contact['address_id'])
-                ) {
-                foreach ($address_merge_fields as $key => $value) {
-                  $merged_data['address'][$key] = $value;
-                };
-                $merged_data['address']['primary_text'] = $primary ? ' primair' : ' (nog niet ingesteld als primair)';
+            if(!_spcivipush_check_result($create_address_results, 'een adres', 'create', $params, $debug_info)) {
+              return FALSE;
+            }
+            // Store merged data.
+            if (!empty($create_address_results['values'])) {
+              foreach ($address_merge_fields as $key => $value) {
+                $merged_data['address'][$key] = $value;
+              };
+              $merged_data['address']['primary_text'] = ' primair';
+            }
+          }
+        }
+      }
+      else {
+        // No overwrite, check if comparable address exists, then do nothing, else add new address.
+        if (!empty($data['house_number']) || !empty($data['postal_code']) || (!empty($data['street_and_number']) && !empty($data['locality']))) {
+
+          // Check if address with same house number exists.
+          if (!empty($data['house_number'])) {
+            $params = array(
+              'contact_id' => $contact_id,
+              'street_number' => $data['house_number'],
+            );
+            $get_street_number_address_result = $spcivi->api('Address', 'get', $params);
+            if(!_spcivipush_check_result($get_street_number_address_result, 'een adres', 'get', $params, $debug_info)) {
+              return FALSE;
+            }
+          }
+
+          // Check if address with same postal code exists.
+          $existing_postal_code_address_found = FALSE;
+          if (!empty($data['postal_code'])) {
+            $params = array(
+              'contact_id' => $contact_id,
+              'postal_code' => $data['postal_code'],
+            );
+            $get_postal_code_address_result = $spcivi->api('Address', 'get', $params);
+            if(!_spcivipush_check_result($get_postal_code_address_result, 'een adres', 'get', $params, $debug_info)) {
+              return FALSE;
+            }
+            $postal_code_result_with_house_number = FALSE;
+            if (!empty($get_postal_code_address_result['values'])) {
+              foreach ($get_postal_code_address_result['values'] as $address_data) {
+                if (!empty($address_data['street_number'])) {
+                  $postal_code_result_with_house_number = TRUE;
+                }
+              }
+              if ($postal_code_result_with_house_number || (empty($data['house_number']) && empty($data['street_and_number']))) {
+                $existing_postal_code_address_found = TRUE;
               }
             }
-            else {
+          }
+
+          // Check if address with same street and number exists.
+          if (!empty($data['street_and_number'])) {
+            $params = array(
+              'contact_id' => $contact_id,
+              'street_address' => $data['street_and_number'],
+            );
+            $get_street_address_result = $spcivi->api('Address', 'get', $params);
+            if(!_spcivipush_check_result($get_street_address_result, 'een adres', 'get', $params, $debug_info)) {
               return FALSE;
+            }
+          }
+
+          if (
+              empty($get_street_number_address_result['values']) &&
+              empty($get_street_address_result['values']) &&
+              $existing_postal_code_address_found === FALSE
+          ) {
+            if (empty($contact['address_id'])) {
+              // Add primary address.
+              $primary = 1;
+              $billing = 1;
+              $location_type_id = 1;
+            }
+            else {
+              $primary = 0;
+              $billing = 0;
+              $location_type_id = 4;
+            }
+            $autosync = array(
+              'street_and_number' => 'street_address',
+              'street' => 'street_name',
+              'house_number' => 'street_number',
+              'house_number_addition' => 'street_unit',
+              'postal_code' => 'postal_code',
+              'locality' => 'city',
+            );
+            $params = array(
+              'contact_id' => $contact_id,
+              'location_type_id' => $location_type_id,
+              'is_primary' => $primary,
+              'is_billing' => $billing,
+              'country_id' => 1152,
+            );
+            $address_data_found = FALSE;
+            $address_merge_fields = array();
+            foreach ($autosync as $key => $civikey) {
+              if (!empty($data[$key])) {
+                $params[$civikey] = $data[$key];
+                $address_merge_fields[$civikey] = $data[$key];
+                $address_data_found = TRUE;
+              }
+            }
+            if ($address_data_found) {
+              $create_address_results = $spcivi->api('Address', 'create', $params);
+              if(_spcivipush_check_result($create_address_results, 'een adres', 'create', $params, $debug_info)) {
+                // If new address was added to existing one.
+                if (
+                  !empty($create_address_results['values']) && 
+                  !empty($contact['address_id'])
+                  ) {
+                  foreach ($address_merge_fields as $key => $value) {
+                    $merged_data['address'][$key] = $value;
+                  };
+                  $merged_data['address']['primary_text'] = $primary ? ' primair' : ' (nog niet ingesteld als primair)';
+                }
+              }
+              else {
+                return FALSE;
+              }
             }
           }
         }
