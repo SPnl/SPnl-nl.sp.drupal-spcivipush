@@ -960,6 +960,15 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
                 !empty($data['street_and_number']) &&
                 !empty($home_address['street_address']) &&
                 $data['street_and_number'] !== $home_address['street_address']
+              ) ||
+              (
+                !empty($data['house_number_addition']) &&
+                !empty($home_address['street_unit']) &&
+                $data['house_number_addition'] !== $home_address['street_unit']
+              ) ||
+              (
+                !empty($data['house_number_addition']) &&
+                empty($home_address['street_unit'])
               )
             ) {
               $different_address = TRUE;
