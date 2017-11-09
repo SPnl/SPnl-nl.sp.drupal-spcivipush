@@ -952,6 +952,10 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
             $different_address = FALSE;
             if (
               (
+                empty($home_address['house_number']) &&
+                empty($home_address['street_and_number'])
+              ) ||
+              (
                 !empty($data['house_number']) &&
                 !empty($home_address['street_number']) &&
                 $data['house_number'] !== $home_address['street_number']
