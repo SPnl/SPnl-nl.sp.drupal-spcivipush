@@ -284,6 +284,7 @@ function spcivipush_split_name($name) {
 
 function spcivipush_valid_contact_id($contact_id) {
   $contact_id = trim($contact_id);
+  $contact_id = preg_replace('/[^0-9]/s', '', $contact_id);
   if (!empty($contact_id)) {
     if (is_numeric($contact_id) && intval($contact_id) == $contact_id && $contact_id > 0) {
       return $contact_id;
