@@ -773,7 +773,7 @@ function spcivipush_check_address_manually($street_and_number, $contact_id) {
 }
 
 function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
-  if (!empty($data['overwrite']) && !empty($data['contact_id']) && spcivipush_overwrite_location($data)) {
+  if (!empty($data['overwrite']) && !empty($data['contact_id'])) {
     $overwrite = TRUE;
   }
   else {
@@ -1294,16 +1294,6 @@ function spcivipush_send_address_check_mail($params) {
       drupal_set_message('Contact '.$params['description'].', geen mail verzonden (fout opgetreden).');
     }
   }
-}
-
-function spcivipush_overwrite_location($data) {
-  if (!empty($data['remote_addr'])) {
-    $location_ip = variable_get('spcivipush_overwrite_location_ip', FALSE);                              
-    if ($data['remote_addr'] == $location_ip) {
-      return TRUE;
-    }
-  }
-  return FALSE;
 }
 
 function spcivipush_create_activity($contact_id, $activity_type, $status, $subject, $text, $debug_info) {
