@@ -512,7 +512,6 @@ function spcivipush_find_same_contacts($data, $debug_info) {
   }
 
   // Find similar contacts based on email, first- and last name.
-  watchdog('test', '<pre>'.print_r($data,TRUE).'</pre>');
   if (
     isset($data['email']) &&
     (
