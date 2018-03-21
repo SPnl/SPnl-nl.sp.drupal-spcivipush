@@ -1,11 +1,11 @@
 <?php
 
-/**   
+/**
  * Implements hook_init().
- */ 
+ */
 function spcivipush_init() {
   module_load_include("inc", "spcivipush", "spcivipush");
-}   
+}
 
 /*
  * Push contact to CiviCRM.

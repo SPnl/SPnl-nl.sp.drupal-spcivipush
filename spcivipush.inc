@@ -1,10 +1,14 @@
 <?php
 
 /**
+ * Helper functions for module.
+ */
+
+/**
  * Parses submission data with sync info in raw data array to sync.
  */
 function spcivipush_parse_data($data) {
-  $push_items = spcivipush_get_data_names(); 
+  $push_items = spcivipush_get_data_names();
   foreach ($push_items as $key => $name) {
     if (isset($data[$key])) {
       $validated_value = call_user_func('spcivipush_valid_' . $key, $data[$key]);
@@ -66,36 +70,38 @@ function spcivipush_parse_data($data) {
  */
 function spcivipush_check_submission_sufficient($data) {
   // Check if values are sufficient to create new or sync existing civi contact.
-  if 
+  if (
+    !empty($data['contact_id']) ||
     (
-      !empty($data['contact_id']) ||
+      !empty($data['email']) ||
+      !empty($data['telephone']) ||
       (
-        !empty($data['email']) ||
-        !empty($data['telephone']) ||
-        (
-          !empty($data['street_and_number']) &&
-          !empty($data['locality'])
+        !empty($data['street_and_number']) &&
+        !empty($data['locality'])
 
-        ) ||
+      ) ||
+      (
+        !empty($data['house_number']) &&
         (
-          !empty($data['house_number']) &&
           (
-            (
-              !empty($data['street']) &&
-              !empty($data['locality'])
-            ) ||
-            !empty($data['postal_code'])
-          )
+            !empty($data['street']) &&
+            !empty($data['locality'])
+          ) ||
+          !empty($data['postal_code'])
         )
       )
-    ) {
+    )
+  ) {
     return TRUE;
   }
-  watchdog('spcivipush', '<p>Contact kon niet worden aangemaakt, te weinig data.</p><pre>'.print_r($data, TRUE).'</pre>');
+  watchdog('spcivipush', '<p>Contact kon niet worden aangemaakt, te weinig data.</p><pre>' . print_r($data, TRUE) . '</pre>');
   drupal_set_message('Contact kan niet worden gemaakt!', 'error');
   return FALSE;
 }
 
+/**
+ * Sync contact data.
+ */
 function spcivipush_sync_contact($data, $debug_info) {
   // Find similar existing contacts in civi.
   $same_contacts = spcivipush_find_same_contacts($data, $debug_info);
@@ -120,7 +126,7 @@ function spcivipush_sync_contact($data, $debug_info) {
           'contact_id' => $contact_id,
         );
         $message = drupal_mail('spcivipush', 'manual_merge', $merge_email, language_default(), $params, 'webmaster@sp.nl');
-        if (!empty($message['result'])) { 
+        if (!empty($message['result'])) {
           watchdog('spcivipush', 'Contact handmatig samenvoegen, mail verzonden.');
           drupal_set_message('Contact handmatig samenvoegen, mail verzonden.');
         }
@@ -153,6 +159,9 @@ function spcivipush_sync_contact($data, $debug_info) {
   return FALSE;
 }
 
+/**
+ * Gets data names.
+ */
 function spcivipush_get_data_names() {
   $data_names = array(
     'contact_id' => 'Contact id',
@@ -178,6 +187,9 @@ function spcivipush_get_data_names() {
   return $data_names;
 }
 
+/**
+ * Split house number.
+ */
 function spcivipush_split_house_number($house_number) {
   $house_number = trim($house_number);
   $regex = "@^([0-9]+)([^0-9].*)$@";
@@ -190,6 +202,9 @@ function spcivipush_split_house_number($house_number) {
   return FALSE;
 }
 
+/**
+ * Split street and number.
+ */
 function spcivipush_split_street_and_number($street_and_number) {
   $matches = array();
   // Street and number and addition.
@@ -200,7 +215,7 @@ function spcivipush_split_street_and_number($street_and_number) {
     preg_match($regex, $street_and_number, $matches);
   }
   if (!empty($matches[2])) {
-    foreach($matches as $key => $match) {
+    foreach ($matches as $key => $match) {
       $matches[$key] = trim($match);
     }
     return $matches;
@@ -208,6 +223,9 @@ function spcivipush_split_street_and_number($street_and_number) {
   return FALSE;
 }
 
+/**
+ * Split name.
+ */
 function spcivipush_split_name($name) {
   $matches = array();
   $name = trim($name);
@@ -231,7 +249,7 @@ function spcivipush_split_name($name) {
     'v/d' => 'van de',
   );
   foreach ($replace as $orig => $new) {
-    if (strpos($name, ' '.$orig.' ') !== FALSE) {
+    if (strpos($name, ' ' . $orig . ' ') !== FALSE) {
       $name = str_replace($orig, $new, $name);
     }
   }
@@ -239,7 +257,7 @@ function spcivipush_split_name($name) {
   // Regexes for title and middle names.
   $titles_regex = 'Mr|mr|Mevr|mevr|Dhr|dhr|Ir|ir|Ing|ing|Bc|bc|Ms|ms|Drs|drs|Dr|dr';
 
-  $middle_names_array = spcivipush_middle_names(); 
+  $middle_names_array = spcivipush_middle_names();
   $middle_names_regex = implode('|', $middle_names_array);
 
   // Split name on middle_name.
@@ -247,7 +265,7 @@ function spcivipush_split_name($name) {
   $result = preg_match($regex, $name, $matches);
   if (!preg_match($regex, $name, $matches)) {
     // Split name on middle name, last name first.
-    $regex = "@^(?'title'(\b(" . $titles_regex . ")\b\.?\s)?)(?'last_name'(\b[A-ZÀÈÌÒÙÁÉÍÓÚÝÂÊÎÔÛÃÑÕÄËÏÖÜŸÇÅa-zàèìòùáéíóúýâêîôûãñõäëïöü¡¿çãñõ'][A-ZÀÈÌÒÙÁÉÍÓÚÝÂÊÎÔÛÃÑÕÄËÏÖÜŸÇÅa-zàèìòùáéíóúýâêîôûãñõäëïöü¡¿çãñõ'\-]+\s?)+),?\s(?'first_name'(([A-ZÀÈÌÒÙÁÉÍÓÚÝÂÊÎÔÛÃÑÕÄËÏÖÜŸÇÅa-zàèìòùáéíóúýâêîôûãñõäëïöü¡¿çãñõ'\-\.]+)\s*)+?)(?'middle_name'(\b(". $middle_names_regex . ")\b\s*))$@";
+    $regex = "@^(?'title'(\b(" . $titles_regex . ")\b\.?\s)?)(?'last_name'(\b[A-ZÀÈÌÒÙÁÉÍÓÚÝÂÊÎÔÛÃÑÕÄËÏÖÜŸÇÅa-zàèìòùáéíóúýâêîôûãñõäëïöü¡¿çãñõ'][A-ZÀÈÌÒÙÁÉÍÓÚÝÂÊÎÔÛÃÑÕÄËÏÖÜŸÇÅa-zàèìòùáéíóúýâêîôûãñõäëïöü¡¿çãñõ'\-]+\s?)+),?\s(?'first_name'(([A-ZÀÈÌÒÙÁÉÍÓÚÝÂÊÎÔÛÃÑÕÄËÏÖÜŸÇÅa-zàèìòùáéíóúýâêîôûãñõäëïöü¡¿çãñõ'\-\.]+)\s*)+?)(?'middle_name'(\b(" . $middle_names_regex . ")\b\s*))$@";
     $result = preg_match($regex, $name, $matches);
     if (!preg_match($regex, $name, $matches)) {
       // Split name without middle_name in first name and last name(s).
@@ -275,6 +293,7 @@ function spcivipush_split_name($name) {
     'last_name',
   );
   foreach ($parts as $part) {
+    $matches[$part] = trim($matches[$part]);
     if (!empty($matches[$part])) {
       $matches[$part] = ucfirst($matches[$part]);
     }
@@ -282,6 +301,9 @@ function spcivipush_split_name($name) {
   return $matches;
 }
 
+/**
+ * Check if contact id is valid.
+ */
 function spcivipush_valid_contact_id($contact_id) {
   $contact_id = trim($contact_id);
   $contact_id = preg_replace('/[^0-9]/s', '', $contact_id);
@@ -293,30 +315,59 @@ function spcivipush_valid_contact_id($contact_id) {
   return FALSE;
 }
 
+/**
+ * Check if name is valid.
+ */
 function spcivipush_valid_name($name) {
   $name = trim(preg_replace('!\s+!', ' ', $name));
-  if (!empty($name)) return $name;
+  if (!empty($name)) {
+    return $name;
+  }
 }
 
+/**
+ * Check if first name is valid.
+ */
 function spcivipush_valid_first_name($first_name) {
   $first_name = trim(preg_replace('!\s+!', ' ', $first_name));
-  if (!empty($first_name)) return $first_name;
+  if (!empty($first_name)) {
+    return $first_name;
+  }
 }
 
+/**
+ * Check if middle name is valid.
+ */
 function spcivipush_valid_middle_name($middle_name) {
   $middle_name = trim(preg_replace('!\s+!', ' ', $middle_name));
-  if (!empty($middle_name)) return $middle_name;
+  if (!empty($middle_name)) {
+    return $middle_name;
+  }
 }
 
+/**
+ * Check if last name is valid.
+ */
 function spcivipush_valid_last_name($last_name) {
   $last_name = trim(preg_replace('!\s+!', ' ', $last_name));
-  if (!empty($last_name)) return $last_name;
-}
-function spcivipush_valid_email($email) {
-  $email = trim($email);
-  if (valid_email_address($email)) return strtolower($email);
+  if (!empty($last_name)) {
+    return $last_name;
+  }
 }
 
+/**
+ * Check if email is valid.
+ */
+function spcivipush_valid_email($email) {
+  $email = trim($email);
+  if (valid_email_address($email)) {
+    return strtolower($email);
+  }
+}
+
+/**
+ * Check if phone is valid.
+ */
 function spcivipush_valid_telephone($telephone) {
   if (!empty($telephone)) {
     // Remove non numerical characters.
@@ -344,12 +395,20 @@ function spcivipush_valid_telephone($telephone) {
   }
 }
 
+/**
+ * Check if street is valid.
+ */
 function spcivipush_valid_street($street) {
   $street = trim($street);
   $street = ucfirst($street);
-  if (!empty($street)) return $street;
+  if (!empty($street)) {
+    return $street;
+  }
 }
 
+/**
+ * Check if house number is valid.
+ */
 function spcivipush_valid_house_number($house_number) {
   // Allow house number and addition, split when parsing data.
   $house_number = trim($house_number);
@@ -359,17 +418,30 @@ function spcivipush_valid_house_number($house_number) {
   }
 }
 
+/**
+ * Check if house number addition is valid.
+ */
 function spcivipush_valid_house_number_addition($house_number_addition) {
   $house_number_addition = trim($house_number_addition);
-  if (isset($house_number_addition) && strlen($house_number_addition) > 0) return $house_number_addition;
+  if (isset($house_number_addition) && strlen($house_number_addition) > 0) {
+    return $house_number_addition;
+  }
 }
 
+/**
+ * Check if street and number is valid.
+ */
 function spcivipush_valid_street_and_number($street_and_number) {
   $street_and_number = trim($street_and_number);
   $street_and_number = ucfirst($street_and_number);
-  if (!empty($street_and_number)) return $street_and_number;
+  if (!empty($street_and_number)) {
+    return $street_and_number;
+  }
 }
 
+/**
+ * Check if postal code is valid.
+ */
 function spcivipush_valid_postal_code($postal_code) {
   $postal_code = trim($postal_code);
   if (preg_match('@^([1-9][0-9]{3})\s?([a-zA-Z]{2})$@', $postal_code, $matches)) {
@@ -377,45 +449,71 @@ function spcivipush_valid_postal_code($postal_code) {
   }
 }
 
+/**
+ * Check if locality is valid.
+ */
 function spcivipush_valid_locality($locality) {
   $locality = trim($locality);
   $locality = ucfirst($locality);
-  if (!empty($locality)) return $locality;
+  if (!empty($locality)) {
+    return $locality;
+  }
 }
 
+/**
+ * Check if note is valid.
+ */
 function spcivipush_valid_notes($notes) {
   return $notes;
 }
 
+/**
+ * Check if overwrite is valid.
+ */
 function spcivipush_valid_overwrite($overwrite) {
   $overwrite = empty($overwrite) ? FALSE : TRUE;
   return $overwrite;
 }
 
+/**
+ * Check if author is valid.
+ */
 function spcivipush_valid_author($author) {
   return trim($author);
 }
 
+/**
+ * Check if remote address is valid.
+ */
 function spcivipush_valid_remote_addr($remote_addr) {
   return trim($remote_addr);
 }
 
+/**
+ * Check if source is valid.
+ */
 function spcivipush_valid_source($source) {
   return trim($source);
 }
 
+/**
+ * Check if groups is valid.
+ */
 function spcivipush_valid_groups($groups) {
   return $groups;
 }
 
 
-/*
- * Longer middle names first!
+/**
+ * Longer middle names first.
  */
 function spcivipush_middle_names() {
   return array("Uijt te de","van van de","uijt te de","Voor in ‘t","De van der","de van der","Van van de","voor in ‘t","Uit te de","onder den","Voor in t","onder het","van de l’","De die le","de die le","Van de l’","voor in t","Onder het","Onder den","uit te de","over het","uijt den","Onder de","boven d’","uijt ten","Uijt ten","over den","Over den","onder de","onder ‘t","Onder ‘t","Van de l","Boven d’","van de l","voor den","Over het","Uijt den","Voor den","Over ‘t","Boven d","Von dem","boven d","Von der","von den","Von den","von der","von dem","Onder t","van der","Van ter","Van gen","van het","van gen","Van het","van ter","over ‘t","van den","Van den","Van Der","Van der","onder t","Van Den","bij den","auf dem","Auf den","Auf dem","voor de","uit het","Uit het","auf den","Auf der","Voor de","voor ‘t","auf ter","Auf ter","auf der","aan het","Aan het","uijt de","vor der","Uijt de","uijt ‘t","Uijt ‘t","Vor der","Uit ten","Aan der","aan der","aan den","Aan den","uit ten","uit den","Uit den","aus der","Bij het","Bij den","Voor ‘t","over de","Over de","bij het","Aus dem","aus dem","Aus den","Aus der","aus den","in het","die le","In der","in der","In het","Uit de","van ‘t","Van de","van De","van de","Van ‘t","Uit ‘t","In den","uit de","uit ‘t","in den","Op ten","op het","Over t","Op het","Die le","op gen","over t","op ten","Von ‘t","Bij ‘t","aus ‘m","bij ‘t","Bij de","von ‘t","bij de","Op gen","op der","Aan ‘t","aan ‘t","De las","de las","Van la","van la","Aan de","aan de","op den","Op der","De die","de die","Op den","Aus ‘m","Onder","op ‘t","Op ‘t","Op de","op de","onder","Uit t","Van t","De l’","uit t","Dalla","de l’","De la","de le","De le","de la","Von t","bij t","Am de","aan t","Aan t","am de","Aus m","Bij t","von t","aus m","Degli","dalla","van t","In de","in ‘t","In ‘t","della","in de","unter","Unter","Della","degli","deca","uijt","Over","over","Voor","in t","In t","Uijt","voor","op t","De l","thoe","de l","thor","Deca","Thor","Dal’","Thoe","Op t","dal’","zum","Zur","toe","zur","tot","Toe","Tot","uit","vom","Von","Vom","ver","Ver","van","Van","vor","Vor","Uit","von","Zum","Los","Den","den","del","Del","Dei","dei","Der","der","dos","Het","Dos","don","Des","des","das","Das","Aus","aus","auf","Auf","Aan","aan","Ben","ben","Dal","dal","bin","Bin","Bij","bij","het","Don","Ter","las","ter","ten","Ten","los","les","Les","Tho","Las","tho","d’","‘T","‘t","D’","Da","da","l’","op","S’","‘s","s’","te","af","am","Am","al","Af","de","Al","zu","Zu","to","Te","De","du","El","Du","Le","do","Op","el","la","in","L’","In","im","La","Im","Do","To","lo","di","‘S","Of","Lo","le","of","Di","A","l","S","s","L","I","T","t","D","d","i","a");
 }
 
+/**
+ * Finds same contacts.
+ */
 function spcivipush_find_same_contacts($data, $debug_info) {
   $spcivi = \SPCivi::getInstance();
   set_time_limit(60);
@@ -515,7 +613,7 @@ function spcivipush_find_same_contacts($data, $debug_info) {
   if (
     isset($data['email']) &&
     (
-      isset($data['first_name']) || 
+      isset($data['first_name']) ||
       isset($data['last_name'])
     )
   ) {
@@ -558,7 +656,7 @@ function spcivipush_find_same_contacts($data, $debug_info) {
   // Find similar contacts based on address.
   $params = array();
   if (
-      isset($data['first_name']) || 
+      isset($data['first_name']) ||
       isset($data['last_name'])
   ) {
     if (isset($data['postal_code']) && isset($data['house_number'])) {
@@ -620,7 +718,7 @@ function spcivipush_add_contact($data, $debug_info) {
   global $base_url;
   $spcivi = \SPCivi::getInstance();
   set_time_limit(60);
-  $sync_items = spcivipush_get_data_names(); 
+  $sync_items = spcivipush_get_data_names();
 
   // Create contact.
   // Autosync fields than can be autosynced.
@@ -809,7 +907,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
         $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array($new_first, $new_middle, $new_last))));
         $new_name = !empty($new_name) ? $new_name : $data['name'];
         $new_name = !empty($new_name) ? $new_name : '';
-        
+
         if (!empty($new_name) && $old_name !== $new_name) {
           if (empty($old_name) || $overwrite) {
             // Write new name without confirmation.
@@ -1144,7 +1242,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
               if(_spcivipush_check_result($create_address_results, 'een adres', 'create', $params, $debug_info)) {
                 // If new address was added to existing one.
                 if (
-                  !empty($create_address_results['values']) && 
+                  !empty($create_address_results['values']) &&
                   !empty($contact['address_id'])
                   ) {
                   foreach ($address_merge_fields as $key => $value) {
@@ -1248,13 +1346,13 @@ function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
 function spcivipush_first_name_equal($data, $contact) {
   // Check if first name and last name are identical.
   if (
-    (
+   (
       !empty($contact['first_name']) &&
       !empty($data['first_name']) &&
       !empty($contact['last_name']) &&
       !empty($data['last_name']) &&
-      $contact['first_name'] == $data['first_name'] &&
-      $contact['last_name'] == $data['last_name']
+     $contact['first_name'] == $data['first_name'] &&
+     $contact['last_name'] == $data['last_name']
     ) ||
     (
       !empty($contact['first_name']) &&
@@ -1284,7 +1382,7 @@ function spcivipush_send_address_check_mail($params) {
   $check_address_email = variable_get('spcivipush_check_address_email_address', '');
   if (!empty($check_address_email)) {
     $message = drupal_mail('spcivipush', 'check_address', $check_address_email, language_default(), $params, 'webmaster@sp.nl');
-    if (!empty($message['result'])) { 
+    if (!empty($message['result'])) {
       watchdog('spcivipush', 'Contact controle adres ('.$params['description'].'), mail verzonden.');
       drupal_set_message('Contact '.$params['description'].', mail verzonden.');
     }
@@ -1296,9 +1394,9 @@ function spcivipush_send_address_check_mail($params) {
 }
 
 function spcivipush_create_activity($contact_id, $activity_type, $status, $subject, $text, $debug_info) {
-  $spcivi = \SPCivi::getInstance();                                                                   
+  $spcivi = \SPCivi::getInstance();
   set_time_limit(60);
-  $params = array( 
+  $params = array(
     'activity_type_id' => $activity_type,
     'subject' => $subject,
     'target_id' => $contact_id,
@@ -1307,11 +1405,11 @@ function spcivipush_create_activity($contact_id, $activity_type, $status, $subje
     'priority_id' => 2,
   );
   $activity_results = $spcivi->api('Activity', 'create', $params);
-  if (_spcivipush_check_result($activity_results, 'een activiteit', 'create', $params, $debug_info)) {     
+  if (_spcivipush_check_result($activity_results, 'een activiteit', 'create', $params, $debug_info)) {
     if (!empty($activity_results['values'])) {
-      return TRUE;                                                                        
-    }                                                                                               
-  }                                                                                                 
+      return TRUE;
+    }
+  }
   return FALSE;
 }
 
@@ -1324,7 +1422,7 @@ function spcivipush_get_caller_text($debug_info) {
           $caller_text = '';
           $sid = $debug_info->sid;
           $sql = 'SELECT * FROM {spbellen}_action ac INNER JOIN {spbellen_caller} ca ON ac.caller_id = ca.caller_id INNER JOIN users us ON ca.caller_id = us.uid WHERE webform_submission_id = :sid';
-          $query = db_query($sql, array(':sid' => $sid)); 
+          $query = db_query($sql, array(':sid' => $sid));
           $result = $query->fetchAssoc();
           if (!empty($result)) {
             $caller_text = '';
