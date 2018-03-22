@@ -1357,7 +1357,7 @@ function spcivipush_first_name_equal($data, $contact) {
     $data['last_name'] = strtoupper($data['last_name']);
     if (
       (
-        $contact['first_name'] == $data['first_name'] &&
+        substr($contact['first_name'], 0, 1) == substr($data['first_name'], 0, 1) &&
         $contact['last_name'] == $data['last_name']
       ) ||
       (
