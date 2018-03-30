@@ -1346,10 +1346,13 @@ function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
 function spcivipush_first_name_equal($data, $contact) {
   // Check if first name and last name are identical.
   if (
+    (
     !empty($contact['first_name']) &&
-    !empty($data['first_name']) &&
+    !empty($data['first_name'])
+  ) || (
     !empty($contact['last_name']) &&
     !empty($data['last_name'])
+  )
   ) {
     $contact['first_name'] = strtoupper($contact['first_name']);
     $contact['last_name'] = strtoupper($contact['last_name']);
@@ -1357,6 +1360,7 @@ function spcivipush_first_name_equal($data, $contact) {
     $data['last_name'] = strtoupper($data['last_name']);
     if (
       (
+        !empty($data['first_name']) &&
         substr($contact['first_name'], 0, 1) == substr($data['first_name'], 0, 1) &&
         $contact['last_name'] == $data['last_name']
       ) ||
