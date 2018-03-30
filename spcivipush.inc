@@ -66,32 +66,37 @@ function spcivipush_parse_data($data) {
 }
 
 /**
+ * Checks if the address data is sufficient
+ */
+function spcivipush_check_address_sufficient($data) {
+  // Check for: Testlaan 1 (street_and_number), Amsterdam (locality)
+  if (!empty($data['street_and_number']) && !empty($data['locality'])) {
+    return TRUE;
+  }
+
+  // Check for Testlaan (street) 1 (house_number), Amsterdam (locality)
+  if (!empty($data['street']) && !empty($data['house_number']) && !empty($data['locality'])) {
+    return TRUE;
+  }
+  // Check for house number and postal code, for example: 1234AX 7
+  // This is sufficient because we can determine the street and city
+  // from the postal code.
+  if (!empty($data['house_number']) && !empty($data['postal_code'])) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
  * Checks wether a submission contains sufficient data to create new or sync existing civi contact.
  */
 function spcivipush_check_submission_sufficient($data) {
   // Check if values are sufficient to create new or sync existing civi contact.
-  if (
-    !empty($data['contact_id']) ||
-    (
-      !empty($data['email']) ||
-      !empty($data['telephone']) ||
-      (
-        !empty($data['street_and_number']) &&
-        !empty($data['locality'])
+  if (!empty($data['contact_id'])) {
+    return TRUE;
+  }
 
-      ) ||
-      (
-        !empty($data['house_number']) &&
-        (
-          (
-            !empty($data['street']) &&
-            !empty($data['locality'])
-          ) ||
-          !empty($data['postal_code'])
-        )
-      )
-    )
-  ) {
+  if (!empty($data['email']) || !empty($data['telephone']) || spcivipush_check_address_sufficient($data)) {
     return TRUE;
   }
   watchdog('spcivipush', '<p>Contact kon niet worden aangemaakt, te weinig data.</p><pre>' . print_r($data, TRUE) . '</pre>');
