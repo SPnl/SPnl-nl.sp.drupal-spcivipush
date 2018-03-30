@@ -1319,8 +1319,6 @@ function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
 }
 
 function spcivipush_first_name_equal($data, $contact) {
-  dpm($data);
-  dpm($contact);
   // Check if first and last names are missing in both contact and data.
   if (
     empty($contact['first_name']) &&
