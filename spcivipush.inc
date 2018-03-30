@@ -586,37 +586,12 @@ function spcivipush_find_same_contacts($data, $debug_info) {
         return FALSE;
       }
     }
-    // check if found contacts have same last name.
-    foreach ($same_contacts_phone as $contact_id) {
-      // Get contact information.
-      $params = array(
-        'contact_id' => $contact_id,
-        'contact_is_deleted' => 0,
-      );
-      $contact_results = $spcivi->api('Contact', 'get', $params);
-      if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
-        if (!empty($contact_results['values'])) {
-          // Check if first name and last name are identical.
-          $contact = array_pop($contact_results['values']);
-          if (spcivipush_first_name_equal($data, $contact)) {
-            $same_contacts[$contact_id] = $contact_id;
-          }
-        }
-      }
-      else {
-        return FALSE;
-      }
-    }
+    $contact_id = array_pop($same_contacts_phone);
+    $same_contacts[$contact_id] = $contact_id;
   }
 
   // Find similar contacts based on email, first- and last name.
-  if (
-    isset($data['email']) &&
-    (
-      isset($data['first_name']) ||
-      isset($data['last_name'])
-    )
-  ) {
+  if (isset($data['email'])) {
     $params = array(
       'option.limit' => 5,
       'email' => $data['email'],
@@ -1344,15 +1319,28 @@ function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
 }
 
 function spcivipush_first_name_equal($data, $contact) {
+  dpm($data);
+  dpm($contact);
+  // Check if first and last names are missing in both contact and data.
+  if (
+    empty($contact['first_name']) &&
+    empty($contact['last_name']) &&
+    empty($data['first_name']) &&
+    empty($data['last_name'])
+  ) {
+    return TRUE;
+  }
+
   // Check if first name and last name are identical.
   if (
     (
-    !empty($contact['first_name']) &&
-    !empty($data['first_name'])
-  ) || (
-    !empty($contact['last_name']) &&
-    !empty($data['last_name'])
-  )
+      !empty($contact['first_name']) &&
+      !empty($data['first_name'])
+    ) ||
+    (
+      !empty($contact['last_name']) &&
+      !empty($data['last_name'])
+    )
   ) {
     $contact['first_name'] = strtoupper($contact['first_name']);
     $contact['last_name'] = strtoupper($contact['last_name']);
