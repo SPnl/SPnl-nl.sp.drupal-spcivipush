@@ -591,8 +591,28 @@ function spcivipush_find_same_contacts($data, $debug_info) {
         return FALSE;
       }
     }
-    $contact_id = array_pop($same_contacts_phone);
-    $same_contacts[$contact_id] = $contact_id;
+
+    // check if found contacts have same last name.
+    foreach ($same_contacts_phone as $contact_id) {
+      // Get contact information.
+      $params = array(
+        'contact_id' => $contact_id,
+        'contact_is_deleted' => 0,
+      );
+      $contact_results = $spcivi->api('Contact', 'get', $params);
+      if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
+        if (!empty($contact_results['values'])) {
+          // Check if first name and last name are identical.
+          $contact = array_pop($contact_results['values']);
+          if (spcivipush_first_name_equal($data, $contact)) {
+            $same_contacts[$contact_id] = $contact_id;
+          }
+        }
+      }
+      else {
+        return FALSE;
+      }
+    }
   }
 
   // Find similar contacts based on email, first- and last name.
