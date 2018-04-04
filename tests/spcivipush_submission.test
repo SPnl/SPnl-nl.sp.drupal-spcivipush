@@ -77,7 +77,7 @@ class SubmissionTestCase extends DrupalWebTestCase {
     $this->assertTrue($retOnlyEmail, 'Only an email should be sufficient');
 
     $retOnlyPhone = spcivipush_check_submission_sufficient($submissionOnlyPhone);
-    $this->assertTrue($retOnlyPhone, 'Only a phonen number should be sufficient');
+    $this->assertTrue($retOnlyPhone, 'Only a phone number should be sufficient');
 
     $retPhoneAndEmail = spcivipush_check_submission_sufficient($submissionPhoneAndEmail);
     $this->assertTrue($retPhoneAndEmail, 'Both a phone and email should be sufficient');
