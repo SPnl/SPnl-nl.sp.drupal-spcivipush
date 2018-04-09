@@ -1344,6 +1344,12 @@ function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
 }
 
 function spcivipush_first_name_equal($data, $contact) {
+  // Cleanup names for comparison.
+  $contact['first_name'] = preg_replace('/[^A-Z]/', '', strtoupper($contact['first_name']));
+  $contact['last_name'] = preg_replace('/[^A-Z]/', '', strtoupper($contact['last_name']));
+  $data['first_name'] = preg_replace('/[^A-Z]/', '', strtoupper($data['first_name']));
+  $data['last_name'] = preg_replace('/[^A-Z]/', '', strtoupper($data['last_name']));
+
   // Check if first and last names are missing in both contact and data.
   if (
     empty($contact['first_name']) &&
@@ -1354,7 +1360,6 @@ function spcivipush_first_name_equal($data, $contact) {
     return TRUE;
   }
 
-  // Check if first name and last name are identical.
   if (
     (
       !empty($contact['first_name']) &&
@@ -1365,28 +1370,33 @@ function spcivipush_first_name_equal($data, $contact) {
       !empty($data['last_name'])
     )
   ) {
-    $contact['first_name'] = strtoupper($contact['first_name']);
-    $contact['last_name'] = strtoupper($contact['last_name']);
-    $data['first_name'] = strtoupper($data['first_name']);
-    $data['last_name'] = strtoupper($data['last_name']);
+    // Check if complete names match.
+    if ($contact['first_name'] . $contact['last_name'] == $data['first_name'] . $data['last_name']) {
+      return TRUE;
+    }
+
+    // Last name and first letter first name are equal.
     if (
-      (
         !empty($data['first_name']) &&
         substr($contact['first_name'], 0, 1) == substr($data['first_name'], 0, 1) &&
         $contact['last_name'] == $data['last_name']
-      ) ||
+    ) {
+      return TRUE;
+    }
+
+    // First name or last name contact contains first name data or
+    // first name or last name data contains first name contact.
+    if (
+      strlen($contact['first_name']) > 2 &&
+      strlen($data['first_name']) > 2 &&
       (
-        strlen($contact['first_name']) > 2 &&
-        strlen($data['first_name']) > 2 &&
-        (
-          strpos($contact['first_name'], $data['first_name']) !== FALSE ||
-          strpos($data['first_name'], $contact['first_name']) !== FALSE ||
-          strpos($contact['last_name'], $data['first_name']) !== FALSE ||
-          strpos($data['last_name'], $contact['first_name']) !== FALSE
-        )
+        strpos($contact['first_name'], $data['first_name']) !== FALSE ||
+        strpos($data['first_name'], $contact['first_name']) !== FALSE ||
+        strpos($contact['last_name'], $data['first_name']) !== FALSE ||
+        strpos($data['last_name'], $contact['first_name']) !== FALSE
       )
     ) {
-    return TRUE;
+      return TRUE;
     }
   }
   return FALSE;
