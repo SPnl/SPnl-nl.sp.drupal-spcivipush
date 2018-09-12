@@ -902,52 +902,74 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
         $new_first = empty($data['first_name']) ? '' : $data['first_name'];
         $new_middle = empty($data['middle_name']) ? '' : $data['middle_name'];
         $new_last = empty($data['last_name']) ? '' : $data['last_name'];
+        $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array($new_first, $new_middle, $new_last))));
+        $new_name = !empty($new_name) ? $new_name : trim(preg_replace('!\s+!', ' ', $data['name']));
+        $new_name = !empty($new_name) ? $new_name : '';
+        $new_name_array = explode(' ', $new_name);
+
         $old_name = empty($contact['display_name']) ? '' : $contact['display_name'];
         $old_name = trim(preg_replace('!\s+!', ' ', $old_name));
-        $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array($new_first, $new_middle, $new_last))));
-        $new_name = !empty($new_name) ? $new_name : $data['name'];
-        $new_name = !empty($new_name) ? $new_name : '';
+        $old_name_array = explode(' ', $old_name);
 
+        // Check if new name is different from old name.
         if (!empty($new_name) && $old_name !== $new_name) {
-          if (empty($old_name) || $overwrite) {
-            // Write new name without confirmation.
+          // Check if newname is caps locked.
+          if (strtoupper($new_name) !== $new_name) {
+            // Check if old name contains new name.
+            if(strpos($old_name, $new_name) === FALSE) {
+              // Check if new name only first letter.
+              if (
+                !(
+                  count($new_name_array) > 1 &&
+                  count($old_name_array) === count($new_name_array) &&
+                  strlen(str_replace('.', '', $new_name_array[0])) < 3 &&
+                  strlen(str_replace('.', '', $new_name_array[0])) <  strlen(str_replace('.', '', $old_name_array[0])) &&
+                  substr($new_name_array[0], 0, 1) === substr($old_name_array[0], 0, 1)
+                )
+              ) {
+                // Check if new name can be written without check.
+                if (empty($old_name) || $overwrite) {
+                  // Write new name without confirmation.
 
-            $params = array(
-              'id' => $contact_id,
-            );
-            $autosync = array(
-              'first_name' => 'first_name',
-              'middle_name' => 'middle_name',
-              'last_name' => 'last_name',
-            );
-            foreach ($autosync as $key => $civikey) {
-              if (!empty($data[$key])) {
-                $params[$civikey] = $data[$key];
+                  $params = array(
+                    'id' => $contact_id,
+                  );
+                  $autosync = array(
+                    'first_name' => 'first_name',
+                    'middle_name' => 'middle_name',
+                    'last_name' => 'last_name',
+                  );
+                  foreach ($autosync as $key => $civikey) {
+                    if (!empty($data[$key])) {
+                      $params[$civikey] = $data[$key];
+                    }
+                  }
+                  // Make sure last name is set, if data is available.
+                  if (empty($data['first_name']) && empty($data['last_name']) && !empty($data['name'])) {
+                    $params['last_name'] = $data['name'];
+                  }
+                  $merge_contact_results = $spcivi->api('Contact', 'create', $params);
+                  if(_spcivipush_check_result($merge_contact_results, 'contacten', 'create', $params, $debug_info)) {
+                    $merged_data['name'] = array(
+                      'original' => $contact['display_name'],
+                      'new' => $new_name,
+                      'changed' => TRUE,
+                    );
+                  }
+                  else {
+                    return FALSE;
+                  }
+                }
+                else {
+                  // No new name written, create action to check new name.
+                  $merged_data['name'] = array(
+                    'original' => $contact['display_name'],
+                    'new' => $new_name,
+                    'changed' => FALSE,
+                  );
+                }
               }
             }
-            // Make sure last name is set, if data is available.
-            if (empty($data['first_name']) && empty($data['last_name']) && !empty($data['name'])) {
-              $params['last_name'] = $data['name'];
-            }
-            $merge_contact_results = $spcivi->api('Contact', 'create', $params);
-            if(_spcivipush_check_result($merge_contact_results, 'contacten', 'create', $params, $debug_info)) {
-              $merged_data['name'] = array(
-                'original' => $contact['display_name'],
-                'new' => $new_name,
-                'changed' => TRUE,
-              );
-            }
-            else {
-              return FALSE;
-            }
-          }
-          else {
-            // No new name written, create action to check new name.
-            $merged_data['name'] = array(
-              'original' => $contact['display_name'],
-              'new' => $new_name,
-              'changed' => FALSE,
-            );
           }
         }
       }
