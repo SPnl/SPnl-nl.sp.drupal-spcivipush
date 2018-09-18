@@ -459,7 +459,7 @@ function spcivipush_valid_postal_code($postal_code) {
  */
 function spcivipush_valid_locality($locality) {
   $locality = trim($locality);
-  $locality = ucfirst($locality);
+  $locality = strtoupper($locality);
   if (!empty($locality)) {
     return $locality;
   }
@@ -922,13 +922,18 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
                 !(
                   count($new_name_array) > 1 &&
                   count($old_name_array) === count($new_name_array) &&
-                  strlen(str_replace('.', '', $new_name_array[0])) < 3 &&
-                  strlen(str_replace('.', '', $new_name_array[0])) <  strlen(str_replace('.', '', $old_name_array[0])) &&
-                  substr($new_name_array[0], 0, 1) === substr($old_name_array[0], 0, 1)
+                  strtoupper(substr($new_name_array[0], 0, 1)) === strtoupper(substr($old_name_array[0], 0, 1)) &&
+                  (
+                    strpos($new_name_array[0], '.') !== FALSE ||
+                    (
+                      strlen(str_replace('.', '', $new_name_array[0])) < 3 &&
+                      strlen(str_replace('.', '', $new_name_array[0])) <  strlen(str_replace('.', '', $old_name_array[0]))
+                    )
+                  )
                 )
               ) {
                 // Check if new name can be written without check.
-                if (empty($old_name) || $overwrite) {
+                if (empty($old_name) || $overwrite || valid_email_address($old_name)) {
                   // Write new name without confirmation.
 
                   $params = array(
@@ -949,12 +954,14 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
                     $params['last_name'] = $data['name'];
                   }
                   $merge_contact_results = $spcivi->api('Contact', 'create', $params);
-                  if(_spcivipush_check_result($merge_contact_results, 'contacten', 'create', $params, $debug_info)) {
-                    $merged_data['name'] = array(
-                      'original' => $contact['display_name'],
-                      'new' => $new_name,
-                      'changed' => TRUE,
-                    );
+                  if (_spcivipush_check_result($merge_contact_results, 'contacten', 'create', $params, $debug_info)) {
+                    if (!valid_email_address($old_name)) {
+                      $merged_data['name'] = array(
+                        'original' => $contact['display_name'],
+                        'new' => $new_name,
+                        'changed' => TRUE,
+                      );
+                    }
                   }
                   else {
                     return FALSE;
@@ -1003,10 +1010,12 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           );
           $create_email_result = $spcivi->api('Email', 'create', $params);
           if (_spcivipush_check_result($create_email_result, 'een e-mailadres', 'create', $params, $debug_info)) {
-            $merged_data['email'] = array(
-              'email' => $data['email'],
-              'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair)',
-            );
+            if (!empty($contact['email'])) {
+              $merged_data['email'] = array(
+                'email' => $data['email'],
+                'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair)',
+              );
+            }
           }
           else {
             return FALSE;
@@ -1050,10 +1059,12 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           );
           $create_phone_result = $spcivi->api('Phone', 'create', $params);
           if(_spcivipush_check_result($create_phone_result, 'een telefoonnummer', 'create', $params, $debug_info)) {
-            $merged_data['phone'] = array(
-              'phone' => $data['telephone'],
-              'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair)',
-            );
+            if (!empty($contact['phone'])) {
+              $merged_data['phone'] = array(
+                'phone' => $data['telephone'],
+                'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair)',
+              );
+            }
           }
           else {
             return FALSE;
@@ -1062,8 +1073,17 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
       }
 
       // Merge address data.
-      if ((!empty($data['house_number']) && !empty($data['postal_code'])) || (!empty($data['street_and_number']) && !empty($data['locality']))) {
-        if ($overwrite) {
+      if (
+        (!empty($data['house_number']) && !empty($data['postal_code'])) ||
+        (!empty($data['street_and_number']) && !empty($data['locality']))
+      ) {
+        if (
+          $overwrite ||
+          (
+            empty($contact['street_address']) &&
+            empty($contact['house_number'])
+          )
+        ) {
 
           $add_new_address = FALSE;
 
@@ -1125,6 +1145,7 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
             }
           }
           else {
+            // No existing address found.
             $add_new_address = TRUE;
           }
           if ($add_new_address) {
@@ -1160,10 +1181,12 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
               }
               // Store merged data.
               if (!empty($create_address_results['values'])) {
-                foreach ($address_merge_fields as $key => $value) {
-                  $merged_data['address'][$key] = $value;
-                };
-                $merged_data['address']['primary_text'] = ' primair';
+                if (!empty($contact['address_id'])) {
+                  foreach ($address_merge_fields as $key => $value) {
+                    $merged_data['address'][$key] = $value;
+                  };
+                  $merged_data['address']['primary_text'] = ' primair';
+                }
               }
             }
           }
@@ -1280,6 +1303,43 @@ function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
           }
         }
       }
+      // Only postal code.
+      elseif (!empty($data['postal_code']) && empty($contact['postal_code']) && empty($contact['street_address'])) {
+        $params = array(
+          'contact_id' => $contact_id,
+          'location_type_id' => 1,
+          'is_primary' => 1,
+          'is_billing' => 1,
+          'country_id' => 1152,
+          'postal_code' => $data['postal_code'],
+        );
+        $create_address_results = $spcivi->api('Address', 'create', $params);
+        if (!_spcivipush_check_result($create_address_results, 'een adres', 'create', $params, $debug_info)) {
+          return FALSE;
+        }
+        $params = array(
+          'contact_id' => $contact_id,
+          'location_type_id' => 1,
+        );
+        $get_home_address_result = $spcivi->api('Address', 'get', $params);
+        if(!_spcivipush_check_result($get_home_address_result, 'een adres', 'get', $params, $debug_info)) {
+          return FALSE;
+        }
+        if (!empty($get_home_address_result['values'][0])) {
+          $home_address = $get_home_address_result['values'][0];
+          // Set not home, not billing, not primary for existing address.
+          $params = array(
+            'id' => $home_address['id'],
+            'location_type_id' => 4,
+            'is_primary' => 0,
+            'is_billing' => 0,
+          );
+          $create_address_result = $spcivi->api('Address', 'create', $params);
+          if(!_spcivipush_check_result($create_address_result, 'een adres', 'create', $params, $debug_info)) {
+            return FALSE;
+          }
+        }
+      }
 
       // Add notes.
       if (spcivipush_add_notes($contact_id, $data, $debug_info) === FALSE) {
@@ -1366,6 +1426,9 @@ function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
 }
 
 function spcivipush_first_name_equal($data, $contact) {
+  if (valid_email_address($contact['display_name'])) {
+    return TRUE;
+  }
   // Cleanup names for comparison.
   $contact['first_name'] = preg_replace('/[^A-Z]/', '', strtoupper($contact['first_name']));
   $contact['last_name'] = preg_replace('/[^A-Z]/', '', strtoupper($contact['last_name']));
