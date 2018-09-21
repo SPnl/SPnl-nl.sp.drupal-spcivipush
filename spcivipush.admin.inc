@@ -66,49 +66,11 @@ function spcivipush_settings_form($form, &$form_state) {
     '#default_value' => variable_get('spcivipush_note_source_field', array()),
   );
 
-  // Set e-mail settingsm
-  $form['spcivipush_email_settings'] = array(
-    '#type' => 'fieldset',
-    '#title' => 'E-mail instellingen',
-    '#description' => 'Meerdere e-mailadressen scheiden met een komma.',
-  );
-  $form['spcivipush_email_settings']['spcivipush_merge_contact_email_address'] = array(
-    '#type' => 'textfield',
-    '#title' => 'Contacten die handmatig gemerged moeten worden sturen naar:',
-    '#default_value' => variable_get('spcivipush_merge_contact_email_address', ''),
-  );
-  $form['spcivipush_email_settings']['spcivipush_check_name_email_address'] = array(
-    '#type' => 'textfield',
-    '#title' => 'Contacten waarvan de naam handmatig nagekeken moeten worden sturen naar:',
-    '#default_value' => variable_get('spcivipush_check_name_email_address', ''),
-  );
-
-  $form['spcivipush_email_settings']['spcivipush_check_address_email_address'] = array(
-    '#type' => 'textfield',
-    '#title' => 'Contacten waarvan het adres nagekeken moeten worden sturen naar:',
-    '#default_value' => variable_get('spcivipush_check_address_email_address', ''),
-  );
-
   return system_settings_form($form);
 }
 
 function spcivipush_settings_form_validate($form, &$form_state) {
   $values = $form_state['values'];
-  $fields = array(
-    'spcivipush_merge_contact_email_address',
-    'spcivipush_check_name_email_address',
-    'spcivipush_check_address_email_address',
-  );
-  foreach ($fields as $field) {
-    if (!empty($values[$field])) {
-      $email_addresses = explode(',', $values[$field]);
-      foreach ($email_addresses as $email) {
-        if (! valid_email_address(trim($email))) {
-          form_set_error($field, 'Vul een geldig e-mailadres in!');
-        }
-      }
-    }
-  }
 }
 
 function spcivipush_get_civi_tags($sync = TRUE) {
@@ -142,7 +104,7 @@ function spcivipush_get_civi_tags($sync = TRUE) {
             drupal_set_message('Error syncing civicrm tags, using saved data.', 'warning');
           }
         }
-      } 
+      }
       $tags = variable_get('spcivipush_civi_tags', array());
       cache_set('spcivipush_civi_tags', $tags, 'cache', time() + 3600);
     }
@@ -176,6 +138,6 @@ function spcivipush_get_civi_custom_fields($sync = TRUE) {
         drupal_set_message('Error syncing civicrm custom_fields, using saved data.', 'warning');
       }
     }
-  } 
+  }
   return $custom_fields;
 }

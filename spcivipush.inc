@@ -5,6 +5,412 @@
  */
 
 /**
+ * Sync contact data.
+ */
+function spcivipush_sync_contact($data, $debug_info) {
+  // Find similar existing contacts in civi.
+  $existing_contact = spcivipush_find_existing_contact($data, $debug_info);
+  if ($existing_contact !== FALSE) {
+    // Sync contact.
+    if (empty($existing_contact)) {
+      if (!empty($data['contact_id'])) {
+        watchdog('spcivipush', 'Contact nr. ' . $data['contact_id'] . ' kon niet worden gevonden in CiviCRM.');
+        drupal_set_message('Contact nr. ' . $data['contact_id'] . ' kon niet worden gevonden in CiviCRM.');
+        return 'contact id not found';
+      }
+      else {
+        $contact_id = spcivipush_add_contact($data, $debug_info);
+      }
+    }
+    else {
+      $contact_id = spcivipush_merge_contacts($data, $existing_contact, $debug_info);
+    }
+    if (!empty($contact_id)) {
+      if (!empty($data['groups'])) {
+        // Add contact to groups.
+        $result = spcivipush_contact_add_groups($contact_id, $data['groups'], $debug_info);
+        if (!empty($result)) {
+          return $contact_id;
+        }
+      }
+      else {
+        return $contact_id;
+      }
+    }
+  }
+  return FALSE;
+}
+
+/**
+ * Finds same contacts.
+ */
+function spcivipush_find_existing_contact($data, $debug_info) {
+  $spcivi = \SPCivi::getInstance();
+  set_time_limit(60);
+  $existing_contact = array();
+
+  // Find existing contact based on contact_id.
+  if (isset($data['contact_id'])) {
+    $contact_id = $data['contact_id'];
+    $params = array(
+      'option.limit' => 1,
+      'contact_id' => $contact_id,
+      'contact_is_deleted' => 0,
+    );
+    $contact_results = $spcivi->api('Contact', 'get', $params);
+    if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
+      if (!empty($contact_results['values'])) {
+        $existing_contact = array_pop($contact_results['values']);
+        dpm('found existing contact by id');
+        return $existing_contact;
+      }
+    }
+    else {
+      return FALSE;
+    }
+  }
+
+  // Find existing contact based on source (webform).
+  if (preg_match('/^Form: .*\(id: [0-9]+, sid: [0-9]+,[^)]+\)$/', $data['source'])) {
+    $params = array(
+      'option.limit' => 1,
+      'contact_is_deleted' => 0,
+      'contact_source' => $data['source'],
+    );
+    $contact_results = $spcivi->api('Contact', 'get', $params);
+    if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
+      if (!empty($contact_results['values'])) {
+        $existing_contact = array_pop($contact_results['values']);
+        return $existing_contact;
+      }
+    }
+    else {
+      return FALSE;
+    }
+  }
+
+  // Find same contacts based on mobile phone.
+  if (
+    isset($data['telephone']) &&
+    strpos($data['telephone'], '06') === 0 &&
+    strlen($data['telephone']) === 10 &&
+    (
+      isset($data['last_name']) ||
+      isset($data['first_name'])
+    )
+  ) {
+    $mobile_phone = $data['telephone'];
+    $numbers_to_check = array(
+      $mobile_phone,
+      '0031' . substr($mobile_phone, 1),
+      '31' . substr($mobile_phone, 1),
+    );
+    $params = array(
+      'option.limit' => 5,
+      'phone_numeric' => array('IN' => $numbers_to_check),
+      'api.Contact.get' => array(),
+    );
+    $mobile_phone_results = $spcivi->api('Phone', 'get', $params);
+    if (_spcivipush_check_result($mobile_phone_results, 'telefoonnummers', 'get', $params, $debug_info)) {
+      if (!empty($mobile_phone_results['values'])) {
+        foreach ($mobile_phone_results['values'] as $value) {
+          if (!empty($value['api.Contact.get']['values'])) {
+            $existing_contact = array_pop($value['api.Contact.get']['values']);
+            if (spcivipush_first_name_equal($data, $existing_contact)) {
+              return $existing_contact;
+            }
+          }
+        }
+      }
+    }
+    else {
+      return FALSE;
+    }
+  }
+
+  // Find similar contacts based on email, first- and last name.
+  if (isset($data['email'])) {
+    $params = array(
+      'option.limit' => 5,
+      'email' => $data['email'],
+      'api.Contact.get' => array(),
+    );
+    $email_results = $spcivi->api('Email', 'get', $params);
+    if (_spcivipush_check_result($email_results, 'e-mailadressen', 'get', $params, $debug_info)) {
+      if (!empty($email_results['values'])) {
+        foreach ($email_results['values'] as $value) {
+          if (!empty($value['api.Contact.get']['values'])) {
+            $existing_contact = array_pop($value['api.Contact.get']['values']);
+            if (spcivipush_first_name_equal($data, $existing_contact)) {
+              return $existing_contact;
+            }
+          }
+        }
+      }
+    }
+    else {
+      return FALSE;
+    }
+  }
+
+  // Find similar contacts based on address.
+  $params = array();
+  if (
+      isset($data['first_name']) ||
+      isset($data['last_name'])
+  ) {
+    if (isset($data['postal_code']) && isset($data['house_number'])) {
+      $params = array(
+        'option.limit' => 5,
+        'street_number' => $data['house_number'],
+        'postal_code' => $data['postal_code'],
+        'api.Contact.get' => array(),
+      );
+    }
+    if (isset($data['street']) && isset($data['house_number']) && isset($data['locality'])) {
+      $params = array(
+        'option.limit' => 5,
+        'street_number' => $data['house_number'],
+        'street_name' => $data['street'],
+        'city' => $data['locality'],
+        'api.Contact.get' => array(),
+      );
+    }
+
+      if (!empty($params)) {
+
+      // Check if address with same house number and postal code exists.
+      $get_address_result = $spcivi->api('Address', 'get', $params);
+      if(_spcivipush_check_result($get_address_result, 'een adres', 'get', $params, $debug_info)) {
+        if (!empty($get_address_result['values'])) {
+          foreach ($get_address_result['values'] as $value) {
+            if (!empty($value['api.Contact.get']['values'])) {
+              $existing_contact = array_pop($value['api.Contact.get']['values']);
+              if (spcivipush_first_name_equal($data, $existing_contact)) {
+                return $existing_contact;
+              }
+            }
+          }
+        }
+      }
+      else {
+        return FALSE;
+      }
+    }
+  }
+
+  return array();
+}
+
+function spcivipush_add_contact($data, $debug_info) {
+  global $base_url;
+  $spcivi = \SPCivi::getInstance();
+  set_time_limit(60);
+  $sync_items = spcivipush_get_data_names();
+
+  // Create contact.
+  // Autosync fields than can be autosynced.
+  $autosync = array(
+    'first_name' => 'first_name',
+    'middle_name' => 'middle_name',
+    'last_name' => 'last_name',
+    'email' => 'email',
+    'source' => 'contact_source',
+  );
+  $params = array(
+    'contact_type' => 'Individual',
+  );
+  foreach ($autosync as $key => $civikey) {
+    if (!empty($data[$key])) {
+      $params[$civikey] = $data[$key];
+      unset($sync_items[$key]);
+    }
+  }
+  // Make sure last name is set, if data is available.
+  if (empty($data['first_name']) && empty($data['last_name']) && !empty($data['name'])) {
+    $params['last_name'] = $data['name'];
+    $check_name = TRUE; // Create contact first for id.
+  }
+  unset($sync_items['name']);
+
+  // If available, add phone.
+  if (!empty($data['telephone'])) {
+    if (strpos($data['telephone'], '06') === 0) {
+      $phone_type_id = 2;
+    }
+    else {
+      $phone_type_id = 1;
+    }
+    $phone_params = array(
+      'location_type_id' => 1,
+      'phone' => $data['telephone'],
+      'is_primary' => 1,
+      'phone_type_id' => $phone_type_id,
+    );
+    $params = array_merge($params, array('api.Phone.create' => $phone_params));
+  }
+
+  // If available, add address.
+  $autosync = array(
+    'street_and_number' => 'street_address',
+    'street' => 'street_name',
+    'house_number' => 'street_number',
+    'house_number_addition' => 'street_unit',
+    'postal_code' => 'postal_code',
+    'locality' => 'city',
+  );
+  $address_params = array(
+    'location_type_id' => 1,
+    'is_primary' => 1,
+    'country_id' => 1152,
+  );
+  $address_data_found = FALSE;
+  foreach ($autosync as $key => $civikey) {
+    if (!empty($data[$key])) {
+      $address_params[$civikey] = $data[$key];
+      $address_data_found = TRUE;
+    }
+  }
+  if ($address_data_found) {
+    $params = array_merge($params, array('api.Address.create' => $address_params));
+  }
+
+  // Add notes.
+  if (spcivipush_add_notes(NULL, $data, $params, $debug_info) === FALSE) {
+    return FALSE;
+  }
+
+  // Add unverified tag.
+  $tag_id = variable_get('spcivipush_unverified_tag', FALSE);
+  if (!empty($tag_id)) {
+    $tag_params = array(
+      'tag_id' => $tag_id,
+    );
+    $params = array_merge($params, array('api.EntityTag.create' => $tag_params));
+  }
+
+  // Create contact.
+  $create_contact_results = $spcivi->api('Contact', 'create', $params);
+  if (_spcivipush_check_result($create_contact_results, 'een contact', 'create', $params, $debug_info)) {
+    $contact_id = $create_contact_results['id'];
+    $contact = array_pop($create_contact_results['values']);
+    drupal_set_message('Contact in CiviCRM toegevoegd: ' . $contact_id);
+    watchdog('spcivipush', 'Contact in CiviCRM toegevoegd: ' . $contact_id);
+
+    // If no split name, send mail for manually checking name.
+    if (!empty($check_name)) {
+      $text = 'Te corrigeren naam: "' . $data['name'] . '".';
+      spcivipush_create_activity($contact_id, 'Controle wijziging contact via website', 'Scheduled', 'Handmatig controleren naam nieuw contact', $text, $debug_info);
+    }
+
+    return $contact_id;
+  }
+  return FALSE;
+}
+
+function spcivipush_merge_contacts($data, $existing_contact, $debug_info) {
+  if (!empty($data['overwrite']) && !empty($data['contact_id'])) {
+    $overwrite = TRUE;
+  }
+  else {
+    $overwrite = FALSE;
+  }
+  $merged_data = array();
+  $spcivi = \SPCivi::getInstance();
+  set_time_limit(60);
+
+  // Get contact.
+  $contact_id = $existing_contact['id'];
+  $params = array(
+    'id' => $contact_id,
+    'api.Email.get' => array(),
+    'api.Phone.get' => array(),
+    'api.Address.get' => array(),
+    'api.CustomValue.get' => array(),
+  );
+  $get_contact_results = $spcivi->api('Contact', 'get', $params);
+  if (_spcivipush_check_result($get_contact_results, 'contacten', 'get', $params, $debug_info)) {
+    if (!empty($get_contact_results['values'])) {
+      $full_existing_contact = $get_contact_results['values'][0];
+
+      drupal_set_message('Bestaand contact gevonden: ' . $contact_id);
+      watchdog('spcivipush', 'Bestaand contact gevonden: ' . $contact_id);
+
+      // Merge contact.
+      $merge_params = array(
+        'contact_id' => $contact_id,
+      );
+
+      // Merge name data with contact.
+      spcivipush_merge_name($full_existing_contact, $data, $overwrite, $merge_params, $merged_data, $debug_info);
+
+      // Merge email data with contact.
+      spcivipush_merge_email($full_existing_contact, $data, $overwrite, $merge_params, $merged_data, $debug_info);
+
+      // Merge phone data with contact.
+      spcivipush_merge_phone($full_existing_contact, $data, $overwrite, $merge_params, $merged_data, $debug_info);
+
+
+      // Merge address data.
+      spcivipush_merge_address($full_existing_contact, $data, $overwrite, $merge_params, $merged_data, $debug_info);
+
+      // Add notes.
+      spcivipush_add_notes($full_existing_contact, $data, $merge_params, $debug_info);
+
+      // Merge contact.
+      $create_contact_results = $spcivi->api('Contact', 'create', $merge_params);
+      if (_spcivipush_check_result($create_contact_results, 'contacten', 'create', $merge_params, $debug_info)) {
+        if (!empty($create_contact_results['values'])) {
+
+          // Create activities.
+          spcivipush_merge_create_activities($full_existing_contact, $data, $overwrite, $merged_data, $debug_info);
+
+          // Feedback.
+          if (!empty($create_contact_results['values'][0]['api.CustomValue.create'])) {
+            foreach ($create_contact_results['values'][0]['api.CustomValue.create'] as $cust_value_result) {
+              if (isset($cust_value_result['is_error']) && $cust_value_result['is_error'] == 0) {
+                watchdog('spcivipush', 'Notitie toegevoegd.');
+                drupal_set_message('Notitie toegevoegd.');
+              }
+            }
+          }
+
+          return $contact_id;
+        }
+      }
+    }
+  }
+  return FALSE;
+}
+
+function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
+  $added_to_groups = FALSE;
+  $spcivi = \SPCivi::getInstance();
+  set_time_limit(60);
+  // Sync met CiviCRM.
+  foreach ($groups as $group_id) {
+    $params = array(
+      'contact_id' => $contact_id,
+      'group_id' => $group_id,
+    );
+    $create_group_membership = $spcivi->api('GroupContact', 'create', $params);
+    if (_spcivipush_check_result($create_group_membership, 'groepslidmaatschappen', 'create', $params, $debug_info)) {
+      $added_to_groups = TRUE;
+      $added_groups[] = $group_id;
+    }
+    else {
+      return FALSE;
+    }
+  }
+  if ($added_to_groups) {
+    $groups_text = implode(', ', $added_groups);
+    drupal_set_message('Contact nr. '.$contact_id.' was added to groups ('.$groups_text.').');
+    watchdog('spcivipush', 'Contact nr. '.$contact_id.' was added to groups ('.$groups_text.').');
+  }
+  return TRUE;
+}
+
+/**
  * Parses submission data with sync info in raw data array to sync.
  */
 function spcivipush_parse_data($data) {
@@ -47,6 +453,18 @@ function spcivipush_parse_data($data) {
       if (empty($validated_data['house_number_addition']) && !empty($split_street_and_number[3])) {
         $validated_data['house_number_addition'] = $split_street_and_number[3];
       }
+    }
+  }
+
+  // Set street and number if not set.
+  if (
+    empty($validated_data['street_and_number']) &&
+    !empty($validated_data['street']) &&
+    !empty($validated_data['house_number'])
+  ) {
+    $validated_data['street_and_number'] = $validated_data['street'] . ' ' . $validated_data['house_number'];
+    if (!empty($validated_data['house_number_addition'])) {
+      $validated_data['street_and_number'] = $validated_data['street_and_number'] . ' ' . $validated_data['house_number_addition'];
     }
   }
 
@@ -101,66 +519,6 @@ function spcivipush_check_submission_sufficient($data) {
   }
   watchdog('spcivipush', '<p>Contact kon niet worden aangemaakt, te weinig data.</p><pre>' . print_r($data, TRUE) . '</pre>');
   drupal_set_message('Contact kan niet worden gemaakt!', 'error');
-  return FALSE;
-}
-
-/**
- * Sync contact data.
- */
-function spcivipush_sync_contact($data, $debug_info) {
-  // Find similar existing contacts in civi.
-  $same_contacts = spcivipush_find_same_contacts($data, $debug_info);
-  if ($same_contacts !== FALSE) {
-    // Sync contact.
-    if (empty($same_contacts)) {
-      if (!empty($data['contact_id'])) {
-        watchdog('spcivipush', 'Contact nr. ' . $data['contact_id'] . ' kon niet worden gevonden in CiviCRM.');
-        drupal_set_message('Contact nr. ' . $data['contact_id'] . ' kon niet worden gevonden in CiviCRM.');
-        return 'contact id not found';
-      }
-      else {
-        $contact_id = spcivipush_add_contact($data, $debug_info);
-      }
-    }
-    elseif (count($same_contacts) > 1) {
-      $contact_id = spcivipush_merge_contacts($data, $same_contacts, $debug_info);
-      $merge_email = variable_get('spcivipush_merge_contact_email_address', '');
-      if (!empty($merge_email)) {
-        // Send mail for manually merging.
-        $params = array(
-          'contact_id' => $contact_id,
-        );
-        $message = drupal_mail('spcivipush', 'manual_merge', $merge_email, language_default(), $params, 'webmaster@sp.nl');
-        if (!empty($message['result'])) {
-          watchdog('spcivipush', 'Contact handmatig samenvoegen, mail verzonden.');
-          drupal_set_message('Contact handmatig samenvoegen, mail verzonden.');
-        }
-        else {
-          watchdog('spcivipush', 'Contact handmatig samenvoegen, geen mail verzonden verzonden (fout opgetreden).');
-          drupal_set_message('Contact handmatig samenvoegen, geen mail verzonden (fout opgetreden).');
-        }
-      }
-      else {
-        watchdog('spcivipush', 'Contact handmatig samenvoegen, geen mail verzonden.');
-        drupal_set_message('Contact handmatig samenvoegen, geen mail verzonden.');
-      }
-    }
-    else {
-      $contact_id = spcivipush_merge_contacts($data, $same_contacts, $debug_info);
-    }
-    if (!empty($contact_id)) {
-      if (!empty($data['groups'])) {
-        // Add contact to groups.
-        $result = spcivipush_contact_add_groups($contact_id, $data['groups'], $debug_info);
-        if (!empty($result)) {
-          return $contact_id;
-        }
-      }
-      else {
-        return $contact_id;
-      }
-    }
-  }
   return FALSE;
 }
 
@@ -298,9 +656,11 @@ function spcivipush_split_name($name) {
     'last_name',
   );
   foreach ($parts as $part) {
-    $matches[$part] = trim($matches[$part]);
-    if (!empty($matches[$part])) {
-      $matches[$part] = ucfirst($matches[$part]);
+    if (isset($matches[$part])) {
+      $matches[$part] = trim($matches[$part]);
+      if (!empty($matches[$part])) {
+        $matches[$part] = ucfirst($matches[$part]);
+      }
     }
   }
   return $matches;
@@ -516,328 +876,6 @@ function spcivipush_middle_names() {
   return array("Uijt te de","van van de","uijt te de","Voor in ‘t","De van der","de van der","Van van de","voor in ‘t","Uit te de","onder den","Voor in t","onder het","van de l’","De die le","de die le","Van de l’","voor in t","Onder het","Onder den","uit te de","over het","uijt den","Onder de","boven d’","uijt ten","Uijt ten","over den","Over den","onder de","onder ‘t","Onder ‘t","Van de l","Boven d’","van de l","voor den","Over het","Uijt den","Voor den","Over ‘t","Boven d","Von dem","boven d","Von der","von den","Von den","von der","von dem","Onder t","van der","Van ter","Van gen","van het","van gen","Van het","van ter","over ‘t","van den","Van den","Van Der","Van der","onder t","Van Den","bij den","auf dem","Auf den","Auf dem","voor de","uit het","Uit het","auf den","Auf der","Voor de","voor ‘t","auf ter","Auf ter","auf der","aan het","Aan het","uijt de","vor der","Uijt de","uijt ‘t","Uijt ‘t","Vor der","Uit ten","Aan der","aan der","aan den","Aan den","uit ten","uit den","Uit den","aus der","Bij het","Bij den","Voor ‘t","over de","Over de","bij het","Aus dem","aus dem","Aus den","Aus der","aus den","in het","die le","In der","in der","In het","Uit de","van ‘t","Van de","van De","van de","Van ‘t","Uit ‘t","In den","uit de","uit ‘t","in den","Op ten","op het","Over t","Op het","Die le","op gen","over t","op ten","Von ‘t","Bij ‘t","aus ‘m","bij ‘t","Bij de","von ‘t","bij de","Op gen","op der","Aan ‘t","aan ‘t","De las","de las","Van la","van la","Aan de","aan de","op den","Op der","De die","de die","Op den","Aus ‘m","Onder","op ‘t","Op ‘t","Op de","op de","onder","Uit t","Van t","De l’","uit t","Dalla","de l’","De la","de le","De le","de la","Von t","bij t","Am de","aan t","Aan t","am de","Aus m","Bij t","von t","aus m","Degli","dalla","van t","In de","in ‘t","In ‘t","della","in de","unter","Unter","Della","degli","deca","uijt","Over","over","Voor","in t","In t","Uijt","voor","op t","De l","thoe","de l","thor","Deca","Thor","Dal’","Thoe","Op t","dal’","zum","Zur","toe","zur","tot","Toe","Tot","uit","vom","Von","Vom","ver","Ver","van","Van","vor","Vor","Uit","von","Zum","Los","Den","den","del","Del","Dei","dei","Der","der","dos","Het","Dos","don","Des","des","das","Das","Aus","aus","auf","Auf","Aan","aan","Ben","ben","Dal","dal","bin","Bin","Bij","bij","het","Don","Ter","las","ter","ten","Ten","los","les","Les","Tho","Las","tho","d’","‘T","‘t","D’","Da","da","l’","op","S’","‘s","s’","te","af","am","Am","al","Af","de","Al","zu","Zu","to","Te","De","du","El","Du","Le","do","Op","el","la","in","L’","In","im","La","Im","Do","To","lo","di","‘S","Of","Lo","le","of","Di","A","l","S","s","L","I","T","t","D","d","i","a");
 }
 
-/**
- * Finds same contacts.
- */
-function spcivipush_find_same_contacts($data, $debug_info) {
-  $spcivi = \SPCivi::getInstance();
-  set_time_limit(60);
-  $same_contacts = array();
-
-  // Find same contact based on contact_id.
-  if (isset($data['contact_id'])) {
-    $contact_id = $data['contact_id'];
-    $params = array(
-      'option.limit' => 1,
-      'contact_id' => $contact_id,
-      'contact_is_deleted' => 0,
-    );
-    $contact_results = $spcivi->api('Contact', 'get', $params);
-    if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
-      if (!empty($contact_results['values'])) {
-        $same_contacts[$contact_id] = $contact_id;
-        return $same_contacts;
-      }
-    }
-  }
-
-  // Find same contacts based on source (webform).
-  if (preg_match('/^Form: .*\(id: [0-9]+, sid: [0-9]+,[^)]+\)$/', $data['source'])) {
-    $params = array(
-      'option.limit' => 1,
-      'contact_is_deleted' => 0,
-      'contact_source' => $data['source'],
-    );
-    $contact_results = $spcivi->api('Contact', 'get', $params);
-    if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
-      if (!empty($contact_results['values'])) {
-        $contact_result = array_shift($contact_results['values']);
-        if (!empty($contact_result['contact_id'])) {
-          $contact_id = $contact_result['contact_id'];
-          $same_contacts[$contact_id] = $contact_id;
-          return $same_contacts;
-        }
-      }
-    }
-  }
-
-  // Find same contacts based on mobile phone.
-  if (
-    isset($data['telephone']) &&
-    strpos($data['telephone'], '06') === 0 &&
-    (
-      isset($data['last_name']) ||
-      isset($data['first_name'])
-    )
-  ) {
-    $same_contacts_phone = array();
-    $mobile_phone = $data['telephone'];
-    $params = array(
-      'option.limit' => 5,
-    );
-    // Also check international number.
-    $mobile_phone_int = '0031' . substr($mobile_phone, 1);
-    foreach (array($mobile_phone, $mobile_phone_int) as $number_to_check) {
-      $params['phone_numeric'] = $number_to_check;
-      $mobile_phone_results = $spcivi->api('Phone', 'get', $params);
-      if (_spcivipush_check_result($mobile_phone_results, 'telefoonnummers', 'get', $params, $debug_info)) {
-        if (!empty($mobile_phone_results['values'])) {
-          foreach ($mobile_phone_results['values'] as $value) {
-            $same_contacts_phone[$value['contact_id']] = $value['contact_id'];
-          }
-        }
-      }
-      else {
-        return FALSE;
-      }
-    }
-
-    // check if found contacts have same last name.
-    foreach ($same_contacts_phone as $contact_id) {
-      // Get contact information.
-      $params = array(
-        'contact_id' => $contact_id,
-        'contact_is_deleted' => 0,
-      );
-      $contact_results = $spcivi->api('Contact', 'get', $params);
-      if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
-        if (!empty($contact_results['values'])) {
-          // Check if first name and last name are identical.
-          $contact = array_pop($contact_results['values']);
-          if (spcivipush_first_name_equal($data, $contact)) {
-            $same_contacts[$contact_id] = $contact_id;
-          }
-        }
-      }
-      else {
-        return FALSE;
-      }
-    }
-  }
-
-  // Find similar contacts based on email, first- and last name.
-  if (isset($data['email'])) {
-    $params = array(
-      'option.limit' => 5,
-      'email' => $data['email'],
-    );
-    $email_results = $spcivi->api('Email', 'get', $params);
-    if (_spcivipush_check_result($email_results, 'e-mailadressen', 'get', $params, $debug_info)) {
-      if (!empty($email_results['values'])) {
-        foreach ($email_results['values'] as $value) {
-          $email_contact_ids[$value['contact_id']] = $value['contact_id'];
-        }
-        foreach ($email_contact_ids as $contact_id) {
-          // Get contact information.
-          $params = array(
-            'contact_id' => $contact_id,
-            'contact_is_deleted' => 0,
-          );
-          $contact_results = $spcivi->api('Contact', 'get', $params);
-          if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
-            if (!empty($contact_results['values'])) {
-              $contact = array_pop($contact_results['values']);
-              if (spcivipush_first_name_equal($data, $contact)) {
-                $same_contacts[$contact_id] = $contact_id;
-              }
-            }
-          }
-          else {
-            return FALSE;
-          }
-        }
-      }
-    }
-    else {
-      return FALSE;
-    }
-  }
-
-  // Find similar contacts based on address.
-  $params = array();
-  if (
-      isset($data['first_name']) ||
-      isset($data['last_name'])
-  ) {
-    if (isset($data['postal_code']) && isset($data['house_number'])) {
-      $params = array(
-        'option.limit' => 5,
-        'street_number' => $data['house_number'],
-        'postal_code' => $data['postal_code'],
-      );
-    }
-    if (isset($data['street']) && isset($data['house_number']) && isset($data['locality'])) {
-      $params = array(
-        'option.limit' => 5,
-        'street_number' => $data['house_number'],
-        'street_name' => $data['street'],
-        'city' => $data['locality'],
-      );
-    }
-
-      if (!empty($params)) {
-
-      // Check if address with same house number and postal code exists.
-      $get_address_result = $spcivi->api('Address', 'get', $params);
-      if(_spcivipush_check_result($get_address_result, 'een adres', 'get', $params, $debug_info)) {
-        if (!empty($get_address_result['values'])) {
-          foreach ($get_address_result['values'] as $value) {
-            $address_contact_ids[$value['contact_id']] = $value['contact_id'];
-          }
-          foreach ($address_contact_ids as $contact_id) {
-            // Get contact information.
-            $params = array(
-              'contact_id' => $contact_id,
-              'contact_is_deleted' => 0,
-            );
-            $contact_results = $spcivi->api('Contact', 'get', $params);
-            if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
-              if (!empty($contact_results['values'])) {
-                $contact = array_pop($contact_results['values']);
-                if (spcivipush_first_name_equal($data, $contact)) {
-                  $same_contacts[$contact_id] = $contact_id;
-                }
-              }
-            }
-            else {
-              return FALSE;
-            }
-          }
-        }
-      }
-      else {
-        return FALSE;
-      }
-    }
-  }
-
-  return $same_contacts;
-}
-
-function spcivipush_add_contact($data, $debug_info) {
-  global $base_url;
-  $spcivi = \SPCivi::getInstance();
-  set_time_limit(60);
-  $sync_items = spcivipush_get_data_names();
-
-  // Create contact.
-  // Autosync fields than can be autosynced.
-  $autosync = array(
-    'first_name' => 'first_name',
-    'middle_name' => 'middle_name',
-    'last_name' => 'last_name',
-    'email' => 'email',
-    'source' => 'contact_source',
-  );
-  $params = array(
-    'contact_type' => 'Individual',
-  );
-  foreach ($autosync as $key => $civikey) {
-    if (!empty($data[$key])) {
-      $params[$civikey] = $data[$key];
-      unset($sync_items[$key]);
-    }
-  }
-  // Make sure last name is set, if data is available.
-  if (empty($data['first_name']) && empty($data['last_name']) && !empty($data['name'])) {
-    $params['last_name'] = $data['name'];
-    $check_name = TRUE; // Create contact first for id.
-  }
-  unset($sync_items['name']);
-  $create_contact_results = $spcivi->api('Contact', 'create', $params);
-  if (_spcivipush_check_result($create_contact_results, 'een contact', 'create', $params, $debug_info)) {
-    $contact_id = $create_contact_results['id'];
-    drupal_set_message('Contact in CiviCRM toegevoegd: ' . $contact_id);
-    watchdog('spcivipush', 'Contact in CiviCRM toegevoegd: ' . $contact_id);
-
-    // If no split name, send mail for manually checking name.
-    if (!empty($check_name)) {
-      $check_name_email = variable_get('spcivipush_check_name_email_address', '');
-      if (!empty($check_name_email)) {
-        $params = array(
-          'contact_id' => $contact_id,
-          'name' => $data['name'],
-        );
-        $message = drupal_mail('spcivipush', 'check_name', $check_name_email, language_default(), $params, 'webmaster@sp.nl');
-      }
-    }
-
-    // If available, add phone.
-    if (!empty($data['telephone'])) {
-      if (strpos($data['telephone'], '06') === 0) {
-        $phone_type_id = 2;
-      }
-      else {
-        $phone_type_id = 1;
-      }
-      $params = array(
-        'contact_id' => $contact_id,
-        'location_type_id' => 1,
-        'phone' => $data['telephone'],
-        'is_primary' => 1,
-        'phone_type_id' => $phone_type_id,
-      );
-      $create_phone_result = $spcivi->api('Phone', 'create', $params);
-      if (!_spcivipush_check_result($create_phone_result, 'een telefoonnummer', 'create', $params, $debug_info)) {
-        return FALSE;
-      }
-    }
-    // If available, add address.
-    $autosync = array(
-      'street_and_number' => 'street_address',
-      'street' => 'street_name',
-      'house_number' => 'street_number',
-      'house_number_addition' => 'street_unit',
-      'postal_code' => 'postal_code',
-      'locality' => 'city',
-    );
-    $params = array(
-      'contact_id' => $contact_id,
-      'location_type_id' => 1,
-      'is_primary' => 1,
-      'country_id' => 1152,
-    );
-    $address_data_found = FALSE;
-    foreach ($autosync as $key => $civikey) {
-      if (!empty($data[$key])) {
-        $params[$civikey] = $data[$key];
-        $address_data_found = TRUE;
-      }
-    }
-    if ($address_data_found) {
-      $create_address_results = $spcivi->api('Address', 'create', $params);
-      if (!_spcivipush_check_result($create_address_results, 'een adres', 'create', $params, $debug_info)) {
-        return FALSE;
-      }
-      else {
-        if (!empty($data['street_and_number'])) {
-          spcivipush_check_address_manually($data['street_and_number'], $contact_id);
-        }
-      }
-    }
-
-    // Add notes.
-    if (spcivipush_add_notes($contact_id, $data, $debug_info) === FALSE) {
-      return FALSE;
-    }
-
-    // If available set unverified tag.
-    $tag_id = variable_get('spcivipush_unverified_tag', FALSE);
-    if (!empty($tag_id)) {
-      $params = array(
-        'contact_id' => $contact_id,
-        'tag_id' => $tag_id,
-      );
-      $create_tag_results = $spcivi->api('EntityTag', 'create', $params);
-      if (!_spcivipush_check_result($create_tag_results, 'een tag', 'create', $params, $debug_info)) {
-        return FALSE;
-      }
-    }
-    return $contact_id;
-  }
-  return FALSE;
-}
-
 function _spcivipush_check_result($result, $dataname, $action, $params = NULL, $debug_info = NULL) {
   $action_name = ($action === 'get') ? 'ophalen' : 'aanmaken';
   $place_name = ($action === 'get') ? 'uit' : 'in';
@@ -845,582 +883,6 @@ function _spcivipush_check_result($result, $dataname, $action, $params = NULL, $
     drupal_set_message('Fout bij het ' . $action_name . ' van ' . $dataname . ' ' . $place_name . ' CiviCRM.', 'error');
     watchdog('spcivipush', '<p>Fout bij het ' . $action_name . ' van ' . $dataname . ' ' . $place_name . ' CiviCRM.</p>Resultaat:<pre>' . print_r($result, TRUE) . '</pre>Parameters:<pre>' . print_r($params, TRUE) . '</pre>Debug info:<pre>' . print_r($debug_info, TRUE) . '</pre>', array(), WATCHDOG_ERROR);
     return FALSE;
-  }
-  return TRUE;
-}
-
-function spcivipush_check_address_manually($street_and_number, $contact_id) {
-  // Check if there is a house number numeric addition in a street_address, if so, send mail for manual correction.
-  if (!empty($street_and_number)) {
-    if (preg_match('/ \d+[^0-9]+\d+/', $street_and_number)) {
-      // Addition found, send mail.
-      $check_address_email = variable_get('spcivipush_check_address_email_address', '');
-      if (!empty($check_address_email)) {
-        // Send mail for manually merging.
-        $params = array(
-          'type' => 'house_number_addition_check',
-          'description' => 'controle huisnummer toevoeging',
-          'contact_id' => $contact_id,
-          'street_and_number' => $street_and_number,
-        );
-        spcivipush_send_address_check_mail($params);
-      }
-    }
-  }
-}
-
-function spcivipush_merge_contacts($data, $same_contacts, $debug_info) {
-  if (!empty($data['overwrite']) && !empty($data['contact_id'])) {
-    $overwrite = TRUE;
-  }
-  else {
-    $overwrite = FALSE;
-  }
-  $merged_data = array();
-  $spcivi = \SPCivi::getInstance();
-  set_time_limit(60);
-
-  // Get contact.
-  $contact_id = array_pop($same_contacts);
-  $params = array(
-    'id' => $contact_id,
-  );
-  $get_contact_results = $spcivi->api('Contact', 'get', $params);
-  if (_spcivipush_check_result($get_contact_results, 'contacten', 'get', $params, $debug_info)) {
-    if (!empty($get_contact_results['values'])) {
-      $contact = array_pop($get_contact_results['values']);
-
-      drupal_set_message('Bestaand contact gevonden: ' . $contact_id);
-      watchdog('spcivipush', 'Bestaand contact gevonden: ' . $contact_id);
-
-      // Merge name data with contact.
-
-      // check if new name data.
-      if (!empty($data['first_name']) || !empty($data['last_name']) || !empty($data['name'])) {
-
-        // Check if name has changed.
-        $new_first = empty($data['first_name']) ? '' : $data['first_name'];
-        $new_middle = empty($data['middle_name']) ? '' : $data['middle_name'];
-        $new_last = empty($data['last_name']) ? '' : $data['last_name'];
-        $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array($new_first, $new_middle, $new_last))));
-        $new_name = !empty($new_name) ? $new_name : trim(preg_replace('!\s+!', ' ', $data['name']));
-        $new_name = !empty($new_name) ? $new_name : '';
-        $new_name_array = explode(' ', $new_name);
-
-        $old_name = empty($contact['display_name']) ? '' : $contact['display_name'];
-        $old_name = trim(preg_replace('!\s+!', ' ', $old_name));
-        $old_name_array = explode(' ', $old_name);
-
-        // Check if new name is different from old name.
-        if (!empty($new_name) && $old_name !== $new_name) {
-          // Check if newname is caps locked.
-          if (strtoupper($new_name) !== $new_name) {
-            // Check if old name contains new name.
-            if(strpos($old_name, $new_name) === FALSE) {
-              // Check if new name only first letter.
-              if (
-                !(
-                  count($new_name_array) > 1 &&
-                  count($old_name_array) === count($new_name_array) &&
-                  strtoupper(substr($new_name_array[0], 0, 1)) === strtoupper(substr($old_name_array[0], 0, 1)) &&
-                  (
-                    strpos($new_name_array[0], '.') !== FALSE ||
-                    (
-                      strlen(str_replace('.', '', $new_name_array[0])) < 3 &&
-                      strlen(str_replace('.', '', $new_name_array[0])) <  strlen(str_replace('.', '', $old_name_array[0]))
-                    )
-                  )
-                )
-              ) {
-                // Check if new name can be written without check.
-                if (empty($old_name) || $overwrite || valid_email_address($old_name)) {
-                  // Write new name without confirmation.
-
-                  $params = array(
-                    'id' => $contact_id,
-                  );
-                  $autosync = array(
-                    'first_name' => 'first_name',
-                    'middle_name' => 'middle_name',
-                    'last_name' => 'last_name',
-                  );
-                  foreach ($autosync as $key => $civikey) {
-                    if (!empty($data[$key])) {
-                      $params[$civikey] = $data[$key];
-                    }
-                  }
-                  // Make sure last name is set, if data is available.
-                  if (empty($data['first_name']) && empty($data['last_name']) && !empty($data['name'])) {
-                    $params['last_name'] = $data['name'];
-                  }
-                  $merge_contact_results = $spcivi->api('Contact', 'create', $params);
-                  if (_spcivipush_check_result($merge_contact_results, 'contacten', 'create', $params, $debug_info)) {
-                    if (!valid_email_address($old_name)) {
-                      $merged_data['name'] = array(
-                        'original' => $contact['display_name'],
-                        'new' => $new_name,
-                        'changed' => TRUE,
-                      );
-                    }
-                  }
-                  else {
-                    return FALSE;
-                  }
-                }
-                else {
-                  // No new name written, create action to check new name.
-                  $merged_data['name'] = array(
-                    'original' => $contact['display_name'],
-                    'new' => $new_name,
-                    'changed' => FALSE,
-                  );
-                }
-              }
-            }
-          }
-        }
-      }
-
-      // Merge email data with contact.
-      if (!empty($data['email'])) {
-        // Check if e-mail is already set.
-        $params = array(
-          'contact_id' => $contact_id,
-          'email' => $data['email']
-        );
-        $get_emails_result = $spcivi->api('Email', 'get', $params);
-        if(!_spcivipush_check_result($get_emails_result, 'een e-mailadres', 'get', $params, $debug_info)) {
-          return FALSE;
-    }
-        if (!empty($get_emails_result) && empty($get_emails_result['values'])) {
-          if (empty($contact['email']) || $overwrite) {
-            $primary = 1;
-            $location_type_id = 1;
-          }
-          else {
-            $primary = 0;
-            $location_type_id = 1;
-          }
-          // Add email.
-          $params = array(
-            'contact_id' => $contact_id,
-            'location_type_id' => $location_type_id,
-            'email' => $data['email'],
-            'is_primary' => $primary,
-          );
-          $create_email_result = $spcivi->api('Email', 'create', $params);
-          if (_spcivipush_check_result($create_email_result, 'een e-mailadres', 'create', $params, $debug_info)) {
-            if (!empty($contact['email'])) {
-              $merged_data['email'] = array(
-                'email' => $data['email'],
-                'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair)',
-              );
-            }
-          }
-          else {
-            return FALSE;
-          }
-        }
-      }
-
-      // Merge phone data with contact.
-      if (!empty($data['telephone'])) {
-        // Check if phone is already set.
-        $params = array(
-          'contact_id' => $contact_id,
-          'phone_numeric' => $data['telephone']
-        );
-        $get_phone_result = $spcivi->api('Phone', 'get', $params);
-        if (!_spcivipush_check_result($get_phone_result, 'een telefoonnummer', 'get', $params, $debug_info)) {
-          return FALSE;
-        }
-        if (!empty($get_phone_result) && empty($get_phone_result['values'])) {
-          // Phone doesn't exist, add.
-          if (empty($contact['phone']) || $overwrite) {
-            $primary = 1;
-            $location_type_id = 1;
-          }
-          else {
-            $primary = 0;
-            $location_type_id = 1;
-          }
-          if (strpos($data['telephone'], '06') === 0) {
-            $phone_type_id = 2;
-          }
-          else {
-            $phone_type_id = 1;
-          }
-          $params = array(
-            'contact_id' => $contact_id,
-            'location_type_id' => $location_type_id,
-            'phone' => $data['telephone'],
-            'is_primary' => $primary,
-            'phone_type_id' => $phone_type_id,
-          );
-          $create_phone_result = $spcivi->api('Phone', 'create', $params);
-          if(_spcivipush_check_result($create_phone_result, 'een telefoonnummer', 'create', $params, $debug_info)) {
-            if (!empty($contact['phone'])) {
-              $merged_data['phone'] = array(
-                'phone' => $data['telephone'],
-                'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair)',
-              );
-            }
-          }
-          else {
-            return FALSE;
-          }
-        }
-      }
-
-      // Merge address data.
-      if (
-        (!empty($data['house_number']) && !empty($data['postal_code'])) ||
-        (!empty($data['street_and_number']) && !empty($data['locality']))
-      ) {
-        if (
-          $overwrite ||
-          (
-            empty($contact['street_address']) &&
-            empty($contact['house_number'])
-          )
-        ) {
-
-          $add_new_address = FALSE;
-
-          // Check contact home address already exists.
-          $params = array(
-            'contact_id' => $contact_id,
-            'location_type_id' => 1,
-          );
-          $get_home_address_result = $spcivi->api('Address', 'get', $params);
-          if(!_spcivipush_check_result($get_home_address_result, 'een adres', 'get', $params, $debug_info)) {
-            return FALSE;
-          }
-          if (!empty($get_home_address_result['values'][0])) {
-            $home_address = $get_home_address_result['values'][0];
-            // Existing home address found.
-            // check if address is different.
-            $different_address = FALSE;
-            if (
-              (
-                empty($home_address['street_number']) &&
-                empty($home_address['street_address'])
-              ) ||
-              (
-                !empty($data['house_number']) &&
-                !empty($home_address['street_number']) &&
-                $data['house_number'] !== $home_address['street_number']
-              ) ||
-              (
-                !empty($data['street_and_number']) &&
-                !empty($home_address['street_address']) &&
-                $data['street_and_number'] !== $home_address['street_address']
-              ) ||
-              (
-                !empty($data['house_number_addition']) &&
-                !empty($home_address['street_unit']) &&
-                $data['house_number_addition'] !== $home_address['street_unit']
-              ) ||
-              (
-                !empty($data['house_number_addition']) &&
-                empty($home_address['street_unit'])
-              )
-            ) {
-              $different_address = TRUE;
-            }
-            if ($different_address) {
-              // Set not home, not billing, not primary for existing address.
-              $params = array(
-                'id' => $home_address['id'],
-                'location_type_id' => 4,
-                'is_primary' => 0,
-                'is_billing' => 0,
-              );
-              $create_address_result = $spcivi->api('Address', 'create', $params);
-              if(!_spcivipush_check_result($create_address_result, 'een adres', 'create', $params, $debug_info)) {
-                return FALSE;
-              }
-              // Add new address.
-              $add_new_address = TRUE;
-            }
-          }
-          else {
-            // No existing address found.
-            $add_new_address = TRUE;
-          }
-          if ($add_new_address) {
-            // Add new address.
-            $autosync = array(
-              'street_and_number' => 'street_address',
-              'street' => 'street_name',
-              'house_number' => 'street_number',
-              'house_number_addition' => 'street_unit',
-              'postal_code' => 'postal_code',
-              'locality' => 'city',
-            );
-            $params = array(
-              'contact_id' => $contact_id,
-              'location_type_id' => 1,
-              'is_primary' => 1,
-              'is_billing' => 1,
-              'country_id' => 1152,
-            );
-            $address_data_found = FALSE;
-            $address_merge_fields = array();
-            foreach ($autosync as $key => $civikey) {
-              if (!empty($data[$key])) {
-                $params[$civikey] = $data[$key];
-                $address_merge_fields[$civikey] = $data[$key];
-                $address_data_found = TRUE;
-              }
-            }
-            if ($address_data_found) {
-              $create_address_results = $spcivi->api('Address', 'create', $params);
-              if(!_spcivipush_check_result($create_address_results, 'een adres', 'create', $params, $debug_info)) {
-                return FALSE;
-              }
-              // Store merged data.
-              if (!empty($create_address_results['values'])) {
-                if (!empty($contact['address_id'])) {
-                  foreach ($address_merge_fields as $key => $value) {
-                    $merged_data['address'][$key] = $value;
-                  };
-                  $merged_data['address']['primary_text'] = ' primair';
-                }
-              }
-            }
-          }
-        }
-        else {
-          // No overwrite, check if comparable address exists, then do nothing, else add new address.
-
-          // Check if address with same house number exists.
-          if (!empty($data['house_number'])) {
-            $params = array(
-              'contact_id' => $contact_id,
-              'street_number' => $data['house_number'],
-            );
-            $get_street_number_address_result = $spcivi->api('Address', 'get', $params);
-            if(!_spcivipush_check_result($get_street_number_address_result, 'een adres', 'get', $params, $debug_info)) {
-              return FALSE;
-            }
-          }
-
-          // Check if address with same postal code exists.
-          $existing_postal_code_address_found = FALSE;
-          if (!empty($data['postal_code'])) {
-            $params = array(
-              'contact_id' => $contact_id,
-              'postal_code' => $data['postal_code'],
-            );
-            $get_postal_code_address_result = $spcivi->api('Address', 'get', $params);
-            if(!_spcivipush_check_result($get_postal_code_address_result, 'een adres', 'get', $params, $debug_info)) {
-              return FALSE;
-            }
-            $postal_code_result_with_house_number = FALSE;
-            if (!empty($get_postal_code_address_result['values'])) {
-              foreach ($get_postal_code_address_result['values'] as $address_data) {
-                if (!empty($address_data['street_number'])) {
-                  $postal_code_result_with_house_number = TRUE;
-                }
-              }
-              if ($postal_code_result_with_house_number || (empty($data['house_number']) && empty($data['street_and_number']))) {
-                $existing_postal_code_address_found = TRUE;
-              }
-            }
-          }
-
-          // Check if address with same street and number exists.
-          if (!empty($data['street_and_number'])) {
-            $params = array(
-              'contact_id' => $contact_id,
-              'street_address' => $data['street_and_number'],
-            );
-            $get_street_address_result = $spcivi->api('Address', 'get', $params);
-            if(!_spcivipush_check_result($get_street_address_result, 'een adres', 'get', $params, $debug_info)) {
-              return FALSE;
-            }
-          }
-
-          if (
-              empty($get_street_number_address_result['values']) &&
-              empty($get_street_address_result['values']) &&
-              $existing_postal_code_address_found === FALSE
-          ) {
-            if (empty($contact['address_id'])) {
-              // Add primary address.
-              $primary = 1;
-              $billing = 1;
-              $location_type_id = 1;
-            }
-            else {
-              $primary = 0;
-              $billing = 0;
-              $location_type_id = 4;
-            }
-            $autosync = array(
-              'street_and_number' => 'street_address',
-              'street' => 'street_name',
-              'house_number' => 'street_number',
-              'house_number_addition' => 'street_unit',
-              'postal_code' => 'postal_code',
-              'locality' => 'city',
-            );
-            $params = array(
-              'contact_id' => $contact_id,
-              'location_type_id' => $location_type_id,
-              'is_primary' => $primary,
-              'is_billing' => $billing,
-              'country_id' => 1152,
-            );
-            $address_data_found = FALSE;
-            $address_merge_fields = array();
-            foreach ($autosync as $key => $civikey) {
-              if (!empty($data[$key])) {
-                $params[$civikey] = $data[$key];
-                $address_merge_fields[$civikey] = $data[$key];
-                $address_data_found = TRUE;
-              }
-            }
-            if ($address_data_found) {
-              $create_address_results = $spcivi->api('Address', 'create', $params);
-              if(_spcivipush_check_result($create_address_results, 'een adres', 'create', $params, $debug_info)) {
-                // If new address was added to existing one.
-                if (
-                  !empty($create_address_results['values']) &&
-                  !empty($contact['address_id'])
-                  ) {
-                  foreach ($address_merge_fields as $key => $value) {
-                    $merged_data['address'][$key] = $value;
-                  };
-                  $merged_data['address']['primary_text'] = $primary ? ' primair' : ' (nog niet ingesteld als primair)';
-                }
-              }
-              else {
-                return FALSE;
-              }
-            }
-          }
-        }
-      }
-      // Only postal code.
-      elseif (!empty($data['postal_code']) && empty($contact['postal_code']) && empty($contact['street_address'])) {
-        $params = array(
-          'contact_id' => $contact_id,
-          'location_type_id' => 1,
-          'is_primary' => 1,
-          'is_billing' => 1,
-          'country_id' => 1152,
-          'postal_code' => $data['postal_code'],
-        );
-        $create_address_results = $spcivi->api('Address', 'create', $params);
-        if (!_spcivipush_check_result($create_address_results, 'een adres', 'create', $params, $debug_info)) {
-          return FALSE;
-        }
-        $params = array(
-          'contact_id' => $contact_id,
-          'location_type_id' => 1,
-        );
-        $get_home_address_result = $spcivi->api('Address', 'get', $params);
-        if(!_spcivipush_check_result($get_home_address_result, 'een adres', 'get', $params, $debug_info)) {
-          return FALSE;
-        }
-        if (!empty($get_home_address_result['values'][0])) {
-          $home_address = $get_home_address_result['values'][0];
-          // Set not home, not billing, not primary for existing address.
-          $params = array(
-            'id' => $home_address['id'],
-            'location_type_id' => 4,
-            'is_primary' => 0,
-            'is_billing' => 0,
-          );
-          $create_address_result = $spcivi->api('Address', 'create', $params);
-          if(!_spcivipush_check_result($create_address_result, 'een adres', 'create', $params, $debug_info)) {
-            return FALSE;
-          }
-        }
-      }
-
-      // Add notes.
-      if (spcivipush_add_notes($contact_id, $data, $debug_info) === FALSE) {
-        return FALSE;
-      }
-
-      // Create activities.
-      if (!empty($merged_data)) {
-        $text = '<p>Bron: ' . $data['source'] . '</p>';
-        if (!empty($merged_data['name'])) {
-          if ($merged_data['name']['changed']) {
-            $text .= '<p>De naam van het contact is gewijzigd van "' . $merged_data['name']['original'] . '" naar "' . check_plain($merged_data['name']['new']) . '".</p>';
-          }
-          else {
-            $text .= '<p>Er is een naamwijziging doorgegeven van "' . $merged_data['name']['original'] . '" naar "' . check_plain($merged_data['name']['new']) . '". Deze wijziging is nog niet doorgevoerd.</p>';
-          }
-        }
-        if (
-          !empty($merged_data['email']) ||
-          !empty($merged_data['phone']) ||
-          !empty($merged_data['address'])
-        ) {
-          $data_added = TRUE;
-          $text .= "<p>De volgende gegevens zijn toegevoegd:</p>";
-          if (!empty($merged_data['email'])) {
-            $text .= '<p>e-mailadres' . $merged_data['email']['primary_text'] . ': ' . check_plain($merged_data['email']['email']) . "</p>";
-          }
-          if (!empty($merged_data['phone'])) {
-            $text .= '<p>telefoonnummer' . $merged_data['phone']['primary_text'] . ': ' . check_plain($merged_data['phone']['phone']) . "</p>";
-          }
-          if (!empty($merged_data['address'])) {
-            $text .= '<p>adres' . $merged_data['address']['primary_text'] . ':<br/>';
-            unset($merged_data['address']['primary_text']);
-            foreach ($merged_data['address'] as $value) {
-              $text .= '- ' . check_plain($value) . "<br/>";
-            }
-            $text .= '</p>';
-          }
-        }
-        else {
-          $data_added = FALSE;
-        }
-        // Check if spbellen module exists, if so, get caller data.
-        $caller_text = spcivipush_get_caller_text($debug_info);
-        $text .= $caller_text;
-        if ($overwrite || $data_added) {
-          spcivipush_create_activity($contact_id, 'Wijziging contact via website', 'Completed', 'Wijziging gegevens contact', $text, $debug_info);
-        }
-        spcivipush_create_activity($contact_id, 'Controle wijziging contact via website', 'Scheduled', 'Contact gegevens zijn gewijzigd', $text, $debug_info);
-        drupal_set_message('Contactinformatie in CiviCRM samengevoegd met bestaand contact: ' . $contact_id);
-        watchdog('spcivipush', 'Contactinformatie in CiviCRM samengevoegd met bestaand contact: ' . $contact_id);
-      }
-      return $contact_id;
-    }
-  }
-  return FALSE;
-}
-
-function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
-  $added_to_groups = FALSE;
-  $spcivi = \SPCivi::getInstance();
-  set_time_limit(60);
-  // Sync met CiviCRM.
-  foreach ($groups as $group_id) {
-    $params = array(
-      'contact_id' => $contact_id,
-      'group_id' => $group_id,
-    );
-    $create_group_membership = $spcivi->api('GroupContact', 'create', $params);
-    if (_spcivipush_check_result($create_group_membership, 'groepslidmaatschappen', 'create', $params, $debug_info)) {
-      $added_to_groups = TRUE;
-      $added_groups[] = $group_id;
-    }
-    else {
-      return FALSE;
-    }
-  }
-  if ($added_to_groups) {
-    $groups_text = implode(', ', $added_groups);
-    drupal_set_message('Contact nr. '.$contact_id.' was added to groups ('.$groups_text.').');
-    watchdog('spcivipush', 'Contact nr. '.$contact_id.' was added to groups ('.$groups_text.').');
   }
   return TRUE;
 }
@@ -1487,21 +949,6 @@ function spcivipush_first_name_equal($data, $contact) {
   return FALSE;
 }
 
-function spcivipush_send_address_check_mail($params) {
-  $check_address_email = variable_get('spcivipush_check_address_email_address', '');
-  if (!empty($check_address_email)) {
-    $message = drupal_mail('spcivipush', 'check_address', $check_address_email, language_default(), $params, 'webmaster@sp.nl');
-    if (!empty($message['result'])) {
-      watchdog('spcivipush', 'Contact controle adres ('.$params['description'].'), mail verzonden.');
-      drupal_set_message('Contact '.$params['description'].', mail verzonden.');
-    }
-    else {
-      watchdog('spcivipush', 'Contact '.$params['description'].', geen mail verzonden verzonden (fout opgetreden).');
-      drupal_set_message('Contact '.$params['description'].', geen mail verzonden (fout opgetreden).');
-    }
-  }
-}
-
 function spcivipush_create_activity($contact_id, $activity_type, $status, $subject, $text, $debug_info) {
   $spcivi = \SPCivi::getInstance();
   set_time_limit(60);
@@ -1550,12 +997,9 @@ function spcivipush_get_caller_text($debug_info) {
 }
 
 
-function spcivipush_add_notes($contact_id, $data, $debug_info) {
+function spcivipush_add_notes($existing_contact, $data, &$merge_params, $debug_info) {
   // If available add note.
   if (!empty($data['notes'])) {
-
-    $spcivi = \SPCivi::getInstance();
-    set_time_limit(60);
 
     // Get field ids.
     $content_field_id = variable_get('spcivipush_note_content_field');
@@ -1564,23 +1008,19 @@ function spcivipush_add_notes($contact_id, $data, $debug_info) {
     $date_field_id = variable_get('spcivipush_note_date_field');
     $source_field_id = variable_get('spcivipush_note_source_field');
 
-    // Get existing custom fields.
-    $params = array(
-      'sequential' => 1,
-      'entity_id' => $contact_id,
-    );
-    $custom_fields_result = $spcivi->api('CustomValue', 'get', $params);
-    if (!_spcivipush_check_result($custom_fields_result, 'velden', 'get', $params, $debug_info)) {
-      return FALSE;
-    }
-    foreach ($custom_fields_result['values'] as $field_values) {
-      if ($field_values['id'] === $source_field_id) {
-        foreach ($field_values as $key => $value) {
-          if( filter_var($key, FILTER_VALIDATE_INT) ){
-            if ($value === $data['source']) {
-              // Note was already added.
-              watchdog('spcivipush', 'Notitie bestaat reeds.');
-              return;
+    if (!empty($existing_contact)) {
+      if (!empty($existing_contact['api.CustomValue.get']['values'])) {
+        foreach ($existing_contact['api.CustomValue.get']['values'] as $field_values) {
+          if (isset($field_values['id']) && $field_values['id'] === $source_field_id) {
+            foreach ($field_values as $key => $value) {
+              if( filter_var($key, FILTER_VALIDATE_INT) ){
+                if ($value === $data['source']) {
+                  // Note was already added.
+                  drupal_set_message('Notitie bestaat reeds.');
+                  watchdog('spcivipush', 'Notitie bestaat reeds.');
+                  return;
+                }
+              }
             }
           }
         }
@@ -1591,22 +1031,418 @@ function spcivipush_add_notes($contact_id, $data, $debug_info) {
 
     foreach ($data['notes'] as $note_data) {
       if (!empty(trim($note_data['note_content']))) {
-        $params = array(
-          'contact_id' => $contact_id,
-          'entity_id' => $contact_id,
-          'custom_' . $content_field_id => $note_data['note_content'],
-          'custom_' . $use_field_id => $note_data['note_use'],
-          'custom_' . $author_field_id => $data['author'],
-          'custom_' . $date_field_id => $date,
-          'custom_' . $source_field_id => $data['source'],
-        );
-        $create_note_result = $spcivi->api('CustomValue', 'create', $params);
-        if (!_spcivipush_check_result($create_note_result, 'een notitie', 'create', $params, $debug_info)) {
-          return FALSE;
+        foreach($note_data['note_use'] as $note_use) {
+          $params[] = array(
+            'custom_' . $content_field_id => $note_data['note_content'],
+            'custom_' . $use_field_id => $note_use,
+            'custom_' . $author_field_id => $data['author'],
+            'custom_' . $date_field_id => $date,
+            'custom_' . $source_field_id => $data['source'],
+          );
         }
-        watchdog('spcivipush', 'Notitie toegevoegd.');
-        drupal_set_message('Notitie toegevoegd.');
+
+        $merge_params = array_merge($merge_params, array('api.CustomValue.create' => $params));
       }
     }
+  }
+}
+
+function spcivipush_merge_name($existing_contact, $data, $overwrite, &$merge_params, &$merged_data, $debug_info) {
+  $contact_id = $existing_contact['id'];
+  // check if new name data.
+  if (!empty($data['first_name']) || !empty($data['last_name']) || !empty($data['name'])) {
+
+    // Check if name has changed.
+    $new_first = empty($data['first_name']) ? '' : $data['first_name'];
+    $new_middle = empty($data['middle_name']) ? '' : $data['middle_name'];
+    $new_last = empty($data['last_name']) ? '' : $data['last_name'];
+    $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array($new_first, $new_middle, $new_last))));
+    $new_name = !empty($new_name) ? $new_name : trim(preg_replace('!\s+!', ' ', $data['name']));
+    $new_name = !empty($new_name) ? $new_name : '';
+    $new_name_array = explode(' ', $new_name);
+
+    $old_name = empty($existing_contact['display_name']) ? '' : $existing_contact['display_name'];
+    $old_name = trim(preg_replace('!\s+!', ' ', $old_name));
+    $old_name_array = explode(' ', $old_name);
+
+    // Check if new name is different from old name.
+    if (!empty($new_name) && $old_name !== $new_name) {
+      // Check if newname is caps locked.
+      if (strtoupper($new_name) !== $new_name) {
+        // Check if old name contains new name.
+        if(strpos($old_name, $new_name) === FALSE) {
+          // Check if new name only first letter.
+          if (
+            !(
+              count($new_name_array) > 1 &&
+              count($old_name_array) === count($new_name_array) &&
+              strtoupper(substr($new_name_array[0], 0, 1)) === strtoupper(substr($old_name_array[0], 0, 1)) &&
+              (
+                strpos($new_name_array[0], '.') !== FALSE ||
+                (
+                  strlen(str_replace('.', '', $new_name_array[0])) < 3 &&
+                  strlen(str_replace('.', '', $new_name_array[0])) <  strlen(str_replace('.', '', $old_name_array[0]))
+                )
+              )
+            )
+          ) {
+            // Check if new name can be written without check.
+            if (empty($old_name) || $overwrite || valid_email_address($old_name)) {
+              // Write new name without confirmation.
+
+              $params = array(
+                'id' => $contact_id,
+              );
+              $autosync = array(
+                'first_name' => 'first_name',
+                'middle_name' => 'middle_name',
+                'last_name' => 'last_name',
+              );
+              foreach ($autosync as $key => $civikey) {
+                if (!empty($data[$key])) {
+                  $params[$civikey] = $data[$key];
+                }
+              }
+              // Make sure last name is set, if data is available.
+              if (empty($data['first_name']) && empty($data['last_name']) && !empty($data['name'])) {
+                $params['last_name'] = $data['name'];
+              }
+              // Merge params.
+              $merge_params = array_merge($merge_params, $params);
+              if (!valid_email_address($old_name)) {
+                $merged_data['name'] = array(
+                  'original' => $existing_contact['display_name'],
+                  'new' => $new_name,
+                  'changed' => TRUE,
+                );
+              }
+            }
+            else {
+              // No new name written, create action to check new name.
+              $merged_data['name'] = array(
+                'original' => $existing_contact['display_name'],
+                'new' => $new_name,
+                'changed' => FALSE,
+              );
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+function spcivipush_merge_email($existing_contact, $data, $overwrite, &$merge_params, &$merged_data, $debug_info) {
+  $contact_id = $existing_contact['id'];
+  if (!empty($data['email'])) {
+    // Check if e-mail is already set.
+    if (!in_array($data['email'], array_column($existing_contact['api.Email.get']['values'], 'email'))) {
+      if (empty($existing_contact['email']) || $overwrite) {
+        $primary = 1;
+        $location_type_id = 1;
+      }
+      else {
+        $primary = 0;
+        $location_type_id = 1;
+      }
+      // Add email.
+      $params = array(
+        'location_type_id' => $location_type_id,
+        'email' => $data['email'],
+        'is_primary' => $primary,
+      );
+      $merge_params = array_merge($merge_params, array('api.Email.create' => array($params)));
+      $merged_data['email'] = array(
+        'email' => $data['email'],
+        'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair)',
+      );
+    }
+  }
+}
+
+function spcivipush_merge_phone($existing_contact, $data, $overwrite, &$merge_params, &$merged_data, $debug_info) {
+  $contact_id = $existing_contact['id'];
+  if (!empty($data['telephone'])) {
+    // Check if phone is already set.
+    if (!in_array($data['telephone'], array_column($existing_contact['api.Phone.get']['values'], 'phone_numeric'))) {
+      // Phone doesn't exist, add.
+      if (empty($existing_contact['phone']) || $overwrite) {
+        $primary = 1;
+        $location_type_id = 1;
+      }
+      else {
+        $primary = 0;
+        $location_type_id = 1;
+      }
+      if (strpos($data['telephone'], '06') === 0) {
+        $phone_type_id = 2;
+      }
+      else {
+        $phone_type_id = 1;
+      }
+      $params = array(
+        'contact_id' => $contact_id,
+        'location_type_id' => $location_type_id,
+        'phone' => $data['telephone'],
+        'is_primary' => $primary,
+        'phone_type_id' => $phone_type_id,
+      );
+      $merge_params = array_merge($merge_params, array('api.Phone.create' => array($params)));
+      if (!empty($existing_contact['phone'])) {
+        $merged_data['phone'] = array(
+          'phone' => $data['telephone'],
+          'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair)',
+        );
+      }
+    }
+  }
+}
+
+function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_params, &$merged_data, $debug_info) {
+  $contact_id = $existing_contact['id'];
+  $spcivi = \SPCivi::getInstance();
+  // Get contact primary address.
+  $primary_address = array();
+  $primary_address_key = array_search(1, array_column($existing_contact['api.Address.get']['values'], 'is_primary'));
+  if ($primary_address_key !== FALSE) {
+    $primary_address = $existing_contact['api.Address.get']['values'][$primary_address_key];
+  }
+
+  // Check if primary address should be added.
+  if (
+    $overwrite ||
+    empty($primary_address) ||
+    (
+      empty($existing_contact['street_address']) &&
+      empty($existing_contact['house_number']) &&
+      (
+        (!empty($data['house_number']) && !empty($data['postal_code'])) ||
+        (!empty($data['street_and_number']) && !empty($data['locality']))
+      )
+    )
+  ) {
+
+    // Check contact home address already exists.
+    if (!empty($primary_address)) {
+      // check if address is different.
+      $different_address = FALSE;
+      if (
+        // Existing address not specific to house, and specific address data.
+        (
+          (!empty($data['house_number']) || !empty($data['street_address'])) &&
+          empty($primary_address['street_number']) &&
+          empty($primary_address['street_address'])
+        ) ||
+        // Existing address house number differs form address data.
+        (
+          !empty($data['house_number']) &&
+          !empty($primary_address['street_number']) &&
+          $data['house_number'] !== $primary_address['street_number']
+        ) ||
+        // Existing full address differs from data address.
+        (
+          !empty($data['street_and_number']) &&
+          !empty($primary_address['street_address']) &&
+          $data['street_and_number'] !== $primary_address['street_address']
+        ) ||
+        // Existing house number addition differs from data house number addition.
+        (
+          !empty($data['house_number_addition']) &&
+          !empty($primary_address['street_unit']) &&
+          $data['house_number_addition'] !== $primary_address['street_unit']
+        ) ||
+        // No existing house number addition, but addition in data.
+        (
+          !empty($data['house_number_addition']) &&
+          empty($primary_address['street_unit'])
+        )
+      ) {
+        $add_new_primary_address = TRUE;
+      }
+    }
+    else {
+      // No existing home address found.
+      $add_new_primary_address = TRUE;
+    }
+    if ($add_new_primary_address) {
+      // Add new address.
+      $autosync = array(
+        'street_and_number' => 'street_address',
+        'street' => 'street_name',
+        'house_number' => 'street_number',
+        'house_number_addition' => 'street_unit',
+        'postal_code' => 'postal_code',
+        'locality' => 'city',
+      );
+      $params = array(
+        'location_type_id' => 1,
+        'is_primary' => 1,
+        'is_billing' => 1,
+        'country_id' => 1152,
+      );
+      $address_data_found = FALSE;
+      $address_merge_fields = array();
+      foreach ($autosync as $key => $civikey) {
+        if (!empty($data[$key])) {
+          $params[$civikey] = $data[$key];
+          $address_merge_fields[$civikey] = $data[$key];
+          $address_data_found = TRUE;
+        }
+      }
+      if ($address_data_found) {
+        // Store merged data.
+        $merge_params = array_merge($merge_params, array('api.Address.create' => array($params)));
+        if (!empty($existing_contact['address_id'])) {
+          foreach ($address_merge_fields as $key => $value) {
+            $merged_data['address'][$key] = $value;
+          };
+          $merged_data['address']['primary_text'] = ' primair';
+        }
+      }
+    }
+  }
+  else {
+    // No overwrite, check if comparable address exists, then do nothing, else add new address.
+
+    $comparable_address = array();
+
+    // Check if address with same house number exists.
+    $existing_house_numbers = array_column($existing_contact['api.Address.get']['values'], 'street_number');
+    if (!empty($data['house_number']) && !empty($existing_house_numbers)) {
+      if (in_array($data['house_number'], $existing_house_numbers)) {
+        $comparable_address['house_number'] = 'house_number';
+      }
+    }
+
+    // Check if address with same postal code exists.
+    $existing_postal_codes = array_column($existing_contact['api.Address.get']['values'], 'postal_code');
+    if (!empty($data['postal_code']) && !empty($existing_postal_codes)) {
+      if (in_array($data['postal_code'], $existing_postal_codes)) {
+        $comparable_address['postal_code'] = 'postal_code';
+      }
+    }
+
+    // Check if address with same street and number exists.
+    $existing_street_and_numbers = array_column($existing_contact['api.Address.get']['values'], 'street_address');
+    if (!empty($data['street_and_number']) && !empty($existing_street_and_numbers)) {
+      if (in_array($data['street_and_number'], $existing_street_and_numbers)) {
+        $comparable_address['street_and_number'] = 'street_and_number';
+      }
+    }
+
+    if (empty($comparable_address)) {
+      // Check in sufficient new data.
+      if (
+        // No existing address.
+        empty($existing_contact['address_id']) ||
+        (
+          // New data specific.
+          (!empty($data['house_number']) && !empty($data['postal_code'])) ||
+          (!empty($data['street_and_number']) && !empty($data['locality']))
+        ) ||
+        (
+          // Existing data less specific.
+          (empty($data['house_number']) && empty($data['postal_code'])) &&
+          (empty($data['street_and_number']) && empty($data['locality'])) &&
+          empty($existing_contact['street_address']) &&
+          empty($existing_contact['house_number'])
+        )
+      ) {
+        // Sufficient new data.
+        if (empty($existing_contact['address_id'])) {
+          // Add primary address.
+          $primary = 1;
+          $billing = 1;
+          $location_type_id = 1;
+        }
+        else {
+          $primary = 0;
+          $billing = 0;
+          $location_type_id = 4;
+        }
+        $autosync = array(
+          'street_and_number' => 'street_address',
+          'street' => 'street_name',
+          'house_number' => 'street_number',
+          'house_number_addition' => 'street_unit',
+          'postal_code' => 'postal_code',
+          'locality' => 'city',
+        );
+        $params = array(
+          'location_type_id' => $location_type_id,
+          'is_primary' => $primary,
+          'is_billing' => $billing,
+          'country_id' => 1152,
+        );
+        $address_data_found = FALSE;
+        $address_merge_fields = array();
+        foreach ($autosync as $key => $civikey) {
+          if (!empty($data[$key])) {
+            $params[$civikey] = $data[$key];
+            $address_merge_fields[$civikey] = $data[$key];
+            $address_data_found = TRUE;
+          }
+        }
+        if ($address_data_found) {
+          $merge_params = array_merge($merge_params, array('api.Address.create' => array($params)));
+          if (!empty($existing_contact['address_id'])) {
+            foreach ($address_merge_fields as $key => $value) {
+              $merged_data['address'][$key] = $value;
+            };
+            $merged_data['address']['primary_text'] = $primary ? ' primair' : ' (nog niet ingesteld als primair)';
+          }
+        }
+      }
+    }
+  }
+}
+
+function spcivipush_merge_create_activities($existing_contact, $data, $overwrite, $merged_data, $debug_info) {
+  $contact_id = $existing_contact['id'];
+  // Create activities.
+  if (!empty($merged_data)) {
+    $text = '<p>Bron: ' . $data['source'] . '</p>';
+    if (!empty($merged_data['name'])) {
+      if ($merged_data['name']['changed']) {
+        $text .= '<p>De naam van het contact is gewijzigd van "' . $merged_data['name']['original'] . '" naar "' . check_plain($merged_data['name']['new']) . '".</p>';
+      }
+      else {
+        $text .= '<p>Er is een naamwijziging doorgegeven van "' . $merged_data['name']['original'] . '" naar "' . check_plain($merged_data['name']['new']) . '". Deze wijziging is nog niet doorgevoerd.</p>';
+      }
+    }
+    if (
+      !empty($merged_data['email']) ||
+      !empty($merged_data['phone']) ||
+      !empty($merged_data['address'])
+    ) {
+      $data_added = TRUE;
+      $text .= "<p>De volgende gegevens zijn toegevoegd:</p>";
+      if (!empty($merged_data['email'])) {
+        $text .= '<p>e-mailadres' . $merged_data['email']['primary_text'] . ': ' . check_plain($merged_data['email']['email']) . "</p>";
+      }
+      if (!empty($merged_data['phone'])) {
+        $text .= '<p>telefoonnummer' . $merged_data['phone']['primary_text'] . ': ' . check_plain($merged_data['phone']['phone']) . "</p>";
+      }
+      if (!empty($merged_data['address'])) {
+        $text .= '<p>adres' . $merged_data['address']['primary_text'] . ':<br/>';
+        unset($merged_data['address']['primary_text']);
+        foreach ($merged_data['address'] as $value) {
+          $text .= '- ' . check_plain($value) . "<br/>";
+        }
+        $text .= '</p>';
+      }
+    }
+    else {
+      $data_added = FALSE;
+    }
+    // Check if spbellen module exists, if so, get caller data.
+    $caller_text = spcivipush_get_caller_text($debug_info);
+    $text .= $caller_text;
+    if ($overwrite || $data_added) {
+      spcivipush_create_activity($contact_id, 'Wijziging contact via website', 'Completed', 'Wijziging gegevens contact', $text, $debug_info);
+    }
+    spcivipush_create_activity($contact_id, 'Controle wijziging contact via website', 'Scheduled', 'Contact gegevens zijn gewijzigd', $text, $debug_info);
+    drupal_set_message('Contactinformatie in CiviCRM samengevoegd met bestaand contact: ' . $contact_id);
+    watchdog('spcivipush', 'Contactinformatie in CiviCRM samengevoegd met bestaand contact: ' . $contact_id);
   }
 }
