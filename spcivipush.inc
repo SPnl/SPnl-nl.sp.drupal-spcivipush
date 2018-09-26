@@ -61,7 +61,6 @@ function spcivipush_find_existing_contact($data, $debug_info) {
     if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
       if (!empty($contact_results['values'])) {
         $existing_contact = array_pop($contact_results['values']);
-        dpm('found existing contact by id');
         return $existing_contact;
       }
     }
