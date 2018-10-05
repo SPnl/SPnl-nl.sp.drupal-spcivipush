@@ -17,14 +17,19 @@ function spcivipush_init() {
  *     - first_name
  *     - middle_name
  *     - last_name
+ *     - initials
+ *     - birth_date (1974-01-28)
+ *     - gender (m,v,a)
  *     - email
  *     - telephone
+ *     - phone_mobile
  *     - street
  *     - house_number
  *     - house_number_addition
  *     - street_and_number
  *     - postal_code
  *     - locality
+ *     - country (NL)
  *     - notes: array(
  *         array(
  *           note_content,
