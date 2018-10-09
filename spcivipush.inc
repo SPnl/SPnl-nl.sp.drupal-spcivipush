@@ -75,6 +75,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
       'option.limit' => 1,
       'contact_is_deleted' => 0,
       'contact_source' => $data['source'],
+      'contact_is_deleted' => 0,
     );
     $contact_results = $spcivi->api('Contact', 'get', $params);
     if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
@@ -114,9 +115,12 @@ function spcivipush_find_existing_contact($data, $debug_info) {
       if (!empty($mobile_phone_results['values'])) {
         foreach ($mobile_phone_results['values'] as $value) {
           if (!empty($value['api.Contact.get']['values'])) {
-            $existing_contact = array_pop($value['api.Contact.get']['values']);
-            if (spcivipush_extra_check($data, $existing_contact)) {
-              return $existing_contact;
+            foreach ($value['api.Contact.get']['values'] as $existing_contact) {
+              if (empty($existing_contact['contact_is_deleted'])) {
+                if (spcivipush_extra_check($data, $existing_contact)) {
+                  return $existing_contact;
+                }
+              }
             }
           }
         }
@@ -139,9 +143,12 @@ function spcivipush_find_existing_contact($data, $debug_info) {
       if (!empty($email_results['values'])) {
         foreach ($email_results['values'] as $value) {
           if (!empty($value['api.Contact.get']['values'])) {
-            $existing_contact = array_pop($value['api.Contact.get']['values']);
-            if (spcivipush_extra_check($data, $existing_contact)) {
-              return $existing_contact;
+            foreach ($value['api.Contact.get']['values'] as $existing_contact) {
+              if (empty($existing_contact['contact_is_deleted'])) {
+                if (spcivipush_extra_check($data, $existing_contact)) {
+                  return $existing_contact;
+                }
+              }
             }
           }
         }
@@ -184,9 +191,12 @@ function spcivipush_find_existing_contact($data, $debug_info) {
         if (!empty($get_address_result['values'])) {
           foreach ($get_address_result['values'] as $value) {
             if (!empty($value['api.Contact.get']['values'])) {
-              $existing_contact = array_pop($value['api.Contact.get']['values']);
-              if (spcivipush_extra_check($data, $existing_contact)) {
-                return $existing_contact;
+              foreach ($value['api.Contact.get']['values'] as $existing_contact) {
+                if (empty($existing_contact['contact_is_deleted'])) {
+                  if (spcivipush_extra_check($data, $existing_contact)) {
+                    return $existing_contact;
+                  }
+                }
               }
             }
           }
