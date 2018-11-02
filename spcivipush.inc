@@ -463,6 +463,7 @@ function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
  * Parses submission data with sync info in raw data array to sync.
  */
 function spcivipush_parse_data($data) {
+  $validated_data = array();
   $push_items = spcivipush_get_data_names();
   foreach ($push_items as $key => $name) {
     if (isset($data[$key])) {
@@ -1033,7 +1034,7 @@ function spcivipush_extra_check($data, $contact) {
     return TRUE;
   }
   // Check birthdate.
-  if ($data['birth_date'] === $contact['birth_date']) {
+  if (isset($data['birth_date']) && $data['birth_date'] === $contact['birth_date']) {
     return TRUE;
   }
 
@@ -1426,7 +1427,9 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
   $spcivi = \SPCivi::getInstance();
   // Get country ID.
   $country_ids = spcivipush_get_country_ids();
-  $country_id = array_search($data['country'], $country_ids);
+  if (isset($data['country'])) {
+    $country_id = array_search($data['country'], $country_ids);
+  }
   // Get contact primary address.
   $primary_address = array();
   $primary_address_key = array_search(1, array_column($existing_contact['api.Address.get']['values'], 'is_primary'));
