@@ -8,6 +8,7 @@
  * Sync contact data.
  */
 function spcivipush_sync_contact($data, $debug_info) {
+  watchdog('spcivipush', 'Received data:<pre>' . print_r($data, TRUE) . '</pre>');
   // Find similar existing contacts in civi.
   $existing_contact = spcivipush_find_existing_contact($data, $debug_info);
   if ($existing_contact !== FALSE) {
@@ -296,7 +297,9 @@ function spcivipush_add_contact($data, $debug_info) {
   );
 
   // Get country ID.
-  $country_id = array_search($data['country'], spcivipush_get_country_ids());
+  if (!empty($data['country'])) {
+    $country_id = array_search($data['country'], spcivipush_get_country_ids());
+  }
 
   if (empty($country_id)) {
     $address_params['country_id'] = 1152;
@@ -1715,8 +1718,10 @@ function spcivipush_get_country_ids() {
         'sequential' => 0,
       ]);
       $codes_raw = $api->result();
-      if($codes_raw)
-      cache_set('spcivipush_country_codes', get_object_vars($codes_raw->values), 'cache', time() + 86400);
+      if ($codes_raw) {
+        $codes = get_object_vars($codes_raw->values);
+        cache_set('spcivipush_country_codes', $codes, 'cache', time() + 86400);
+      }
     }
   }
   return $codes;
