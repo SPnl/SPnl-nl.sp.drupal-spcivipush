@@ -1358,7 +1358,7 @@ function spcivipush_merge_gender($existing_contact, $data, $overwrite, &$merge_p
 function spcivipush_merge_telephone($existing_contact, $data, $overwrite, &$merge_params, &$merged_data, $debug_info) {
   $contact_id = $existing_contact['id'];
   $params = array();
-  if (!empty($data['telephone']) && $data['telephone'] !== $data['phone_mobile']) {
+  if (!empty($data['telephone']) && (empty($data['phone_mobile']) || $data['telephone'] !== $data['phone_mobile'])) {
     if (empty($data['phone_mobile'])) {
       $is_primary = 1;
     }
