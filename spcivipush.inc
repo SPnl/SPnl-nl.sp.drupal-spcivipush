@@ -242,13 +242,13 @@ function spcivipush_add_contact($data, $debug_info) {
   // Make sure last name is set, if data is available.
   if (empty($data['first_name']) && empty($data['last_name']) && !empty($data['name'])) {
     $params['last_name'] = $data['name'];
-    $check_name = TRUE; // Create contact first for id.
+    $check_name = TRUE;
   }
   unset($sync_items['name']);
 
   // If available, add phone.
   $phone_params = array();
-  if (!empty($data['telephone']) && $data['phone_mobile'] !== $data['telephone']) {
+  if (!empty($data['telephone']) && (empty($data['phone_mobile']) || $data['telephone'] !== $data['phone_mobile'])) {
     if (empty($data['phone_mobile'])) {
       $is_primary = 0;
     }
@@ -567,8 +567,15 @@ function spcivipush_check_submission_sufficient($data) {
     return TRUE;
   }
 
-  if (!empty($data['email']) || !empty($data['telephone']) || spcivipush_check_address_sufficient($data) || !empty($data['birth_date'])) {
-    return TRUE;
+  if (
+    !empty($data['first_name']) ||
+    !empty($data['last_name'])||
+    !empty($data['name']) ||
+    !empty($data['email'])
+  ) {
+    if (!empty($data['email']) || !empty($data['telephone']) || spcivipush_check_address_sufficient($data) || !empty($data['birth_date'])) {
+      return TRUE;
+    }
   }
   watchdog('spcivipush', '<p>Contact kon niet worden aangemaakt, te weinig data.</p><pre>' . print_r($data, TRUE) . '</pre>');
   drupal_set_message('Contact kan niet worden gemaakt!', 'error');
