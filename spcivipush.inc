@@ -522,8 +522,10 @@ function spcivipush_parse_data($data) {
   }
 
   // Remove too big house_numbers.
-  if (strlen($validated_data['house_number']) > 5) {
-    unset($validated_data['house_number']);
+  if (isset($validated_data['house_number'])) {
+    if (strlen($validated_data['house_number']) > 5) {
+      unset($validated_data['house_number']);
+    }
   }
 
   // If name item, then if possible, set first name, middle_name, and last name.
