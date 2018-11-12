@@ -1469,6 +1469,7 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
   ) {
 
     // Check contact home address already exists.
+    $add_new_primary_address = FALSE;
     if (!empty($primary_address)) {
       // check if address is different.
       $different_address = FALSE;
