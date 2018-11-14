@@ -629,7 +629,8 @@ function spcivipush_split_house_number($house_number) {
   $house_number = trim($house_number);
   $regex = "@^([0-9]+)([^0-9].*)$@";
   if (preg_match($regex, $house_number, $matches)) {
-    $matches[2] = trim($matches[2]);
+    $matches[1] = spcivipush_valid_house_number($matches[1]);
+    $matches[2] = spcivipush_valid_house_number_addition($matches[2]);
     if (!empty($matches[2])) {
       return $matches;
     }
@@ -649,10 +650,12 @@ function spcivipush_split_street_and_number($street_and_number) {
     $regex = "@^(.+)((?<![0-9])[0-9]+)$@";
     preg_match($regex, $street_and_number, $matches);
   }
+  $matches[1] = spcivipush_valid_street($matches[1]);
+  $matches[2] = spcivipush_valid_house_number($matches[2]);
+  if (isset($matches[3])) {
+    $matches[3] = spcivipush_valid_house_number_addition($matches[3]);
+  }
   if (!empty($matches[2])) {
-    foreach ($matches as $key => $match) {
-      $matches[$key] = trim($match);
-    }
     return $matches;
   }
   return FALSE;
@@ -890,7 +893,7 @@ function spcivipush_valid_street($street) {
 function spcivipush_valid_house_number($house_number) {
   // Allow house number and addition, split when parsing data.
   $house_number = trim($house_number);
-  $regex = "@^[0-9]+.*$@";
+  $regex = "@^[0-9]{1,5}([^0-9].*)?$@";
   if (preg_match($regex, $house_number)) {
     return $house_number;
   }
@@ -901,7 +904,7 @@ function spcivipush_valid_house_number($house_number) {
  */
 function spcivipush_valid_house_number_addition($house_number_addition) {
   $house_number_addition = trim($house_number_addition);
-  if (isset($house_number_addition) && strlen($house_number_addition) > 0) {
+  if (isset($house_number_addition) && strlen($house_number_addition) > 0 && strlen($house_number_addition) <= 16) {
     return $house_number_addition;
   }
 }
