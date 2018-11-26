@@ -926,10 +926,9 @@ function spcivipush_valid_street_and_number($street_and_number) {
 function spcivipush_valid_postal_code($postal_code) {
   $postal_code = trim($postal_code);
   if (!empty($postal_code)) {
-    if (preg_match('@^([1-9][0-9]{3})\s?([a-zA-Z]{2})$@', $postal_code, $matches)) {
+    if (preg_match('@^([1-9][0-9]{3})\s?([a-zA-Z]{2}).*$@', $postal_code, $matches)) {
       return $matches[1] . ' ' . strtoupper($matches[2]);
     }
-    return $postal_code;
   }
 }
 
