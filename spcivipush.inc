@@ -842,6 +842,16 @@ function spcivipush_valid_telephone($telephone) {
     ) {
       $telephone = substr_replace($telephone, '0', 0, 4);
     }
+    // Remove fake phone numbers.
+    if (in_array($telephone, array(
+      '0123456789',
+    ))) {
+      return FALSE;
+    }
+    // Remove repetitive numbers in last 8 numbers phone numbers.
+    if (count(array_unique(str_split(substr($telephone, -8), 2))) === 1) {
+      return FALSE;
+    }
     return $telephone;
   }
 }
@@ -871,6 +881,17 @@ function spcivipush_valid_phone_mobile($phone_mobile) {
       strpos($phone_mobile, '0031') === 0
     ) {
       $phone_mobile = substr_replace($phone_mobile, '0', 0, 4);
+    }
+    // Remove fake phone numbers.
+    if (in_array($mobile_phone, array(
+      '0612345678',
+      '06123456789',
+    ))) {
+      return FALSE;
+    }
+    // Remove repetitive numbers in last 8 numbers phone numbers.
+    if (count(array_unique(str_split(substr($mobile_phone, -8), 2))) === 1) {
+      return FALSE;
     }
     return $phone_mobile;
   }
