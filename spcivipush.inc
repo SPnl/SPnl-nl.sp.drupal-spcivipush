@@ -377,7 +377,7 @@ function spcivipush_merge_contacts($data, $existing_contact, $debug_info) {
     if (!empty($get_contact_results['values'])) {
       $full_existing_contact = $get_contact_results['values'][0];
 
-      drupal_set_message('Bestaand contact gevonden: ' . $contact_id);
+      drupal_set_message('Bestaand contact gevonden: <a href="https://spnet.nl/civicrm/contact/view?reset=1&cid=' . $contact_id . '" target="_blank">' . $contact_id . '</a>');
       watchdog('spcivipush', 'Bestaand contact gevonden: ' . $contact_id);
 
       // Merge contact.
@@ -1736,7 +1736,7 @@ function spcivipush_merge_create_activities($existing_contact, $data, $overwrite
       spcivipush_create_activity($contact_id, 'Wijziging contact via website', 'Completed', 'Wijziging gegevens contact', $text, $debug_info);
     }
     spcivipush_create_activity($contact_id, 'Controle wijziging contact via website', 'Scheduled', 'Contact gegevens zijn gewijzigd', $text, $debug_info);
-    drupal_set_message('Contactinformatie in CiviCRM samengevoegd met bestaand contact: ' . $contact_id);
+    drupal_set_message('Contactinformatie in CiviCRM samengevoegd met bestaand contact: <a href="https://spnet.nl/civicrm/contact/view?reset=1&cid=' . $contact_id . '" target="_blank">' . $contact_id . '</a>');
     watchdog('spcivipush', 'Contactinformatie in CiviCRM samengevoegd met bestaand contact: ' . $contact_id);
   }
 }
