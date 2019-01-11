@@ -337,7 +337,7 @@ function spcivipush_add_contact($data, $debug_info) {
   if (_spcivipush_check_result($create_contact_results, 'een contact', 'create', $params, $debug_info)) {
     $contact_id = $create_contact_results['id'];
     $contact = array_pop($create_contact_results['values']);
-    drupal_set_message('Contact in CiviCRM toegevoegd: ' . $contact_id);
+    drupal_set_message('Contact in CiviCRM toegevoegd: <a href="https://spnet.nl/civicrm/contact/view?reset=1&cid=' . $contact_id . '" target="_blank">' . $contact_id . '</a>');
     watchdog('spcivipush', 'Contact in CiviCRM toegevoegd: ' . $contact_id);
 
     // If no split name, send mail for manually checking name.
