@@ -323,6 +323,11 @@ function spcivipush_add_contact($data, $debug_info) {
     return FALSE;
   }
 
+  // Add sp_active.
+  if (spcivipush_add_sp_active($data, $params) === FALSE) {
+    return FALSE;
+  }
+
   // Add unverified tag.
   $tag_id = variable_get('spcivipush_unverified_tag', FALSE);
   if (!empty($tag_id)) {
@@ -409,6 +414,9 @@ function spcivipush_merge_contacts($data, $existing_contact, $debug_info) {
       // Add notes.
       spcivipush_add_notes($full_existing_contact, $data, $merge_params, $debug_info);
 
+      // Add sp_active.
+      spcivipush_add_sp_active($data, $merge_params);
+
       // Merge contact.
       $create_contact_results = $spcivi->api('Contact', 'create', $merge_params);
       if (_spcivipush_check_result($create_contact_results, 'contacten', 'create', $merge_params, $debug_info)) {
@@ -421,8 +429,8 @@ function spcivipush_merge_contacts($data, $existing_contact, $debug_info) {
           if (!empty($create_contact_results['values'][0]['api.CustomValue.create'])) {
             foreach ($create_contact_results['values'][0]['api.CustomValue.create'] as $cust_value_result) {
               if (isset($cust_value_result['is_error']) && $cust_value_result['is_error'] == 0) {
-                watchdog('spcivipush', 'Notitie toegevoegd.');
-                drupal_set_message('Notitie toegevoegd.');
+                watchdog('spcivipush', 'Notitie of activiteiten toegevoegd.');
+                drupal_set_message('Notitie of activiteiten toegevoegd.');
               }
             }
           }
@@ -539,6 +547,11 @@ function spcivipush_parse_data($data) {
         $validated_data[$part] = $split_name[$part];
       }
     }
+  }
+
+  // Add sp_active.
+  if (!empty($data['sp_active']) && !empty($data['sp_active']['active'])) {
+    $validated_data['sp_active'] = $data['sp_active'];
   }
   return $validated_data;
 }
@@ -1162,7 +1175,6 @@ function spcivipush_get_caller_text($debug_info) {
   }
 }
 
-
 function spcivipush_add_notes($existing_contact, $data, &$merge_params, $debug_info) {
   // If available add note.
   if (!empty($data['notes'])) {
@@ -1179,7 +1191,7 @@ function spcivipush_add_notes($existing_contact, $data, &$merge_params, $debug_i
         foreach ($existing_contact['api.CustomValue.get']['values'] as $field_values) {
           if (isset($field_values['id']) && $field_values['id'] === $source_field_id) {
             foreach ($field_values as $key => $value) {
-              if( filter_var($key, FILTER_VALIDATE_INT) ){
+              if (filter_var($key, FILTER_VALIDATE_INT)) {
                 if ($value === $data['source']) {
                   // Note was already added.
                   drupal_set_message('Notitie bestaat reeds.');
@@ -1197,7 +1209,7 @@ function spcivipush_add_notes($existing_contact, $data, &$merge_params, $debug_i
 
     foreach ($data['notes'] as $note_data) {
       if (!empty(trim($note_data['note_content']))) {
-        foreach($note_data['note_use'] as $note_use) {
+        foreach ($note_data['note_use'] as $note_use) {
           $params[] = array(
             'custom_' . $content_field_id => $note_data['note_content'],
             'custom_' . $use_field_id => $note_use,
@@ -1209,6 +1221,17 @@ function spcivipush_add_notes($existing_contact, $data, &$merge_params, $debug_i
 
         $merge_params = array_merge($merge_params, array('api.CustomValue.create' => $params));
       }
+    }
+  }
+}
+
+function spcivipush_add_sp_active($data, &$params) {
+  if (!empty($data['sp_active'])) {
+    if (!empty($data['sp_active']['active'])) {
+      $params = array_merge($params, array(
+        'custom_178' => $data['sp_active']['active'],
+        'custom_179' => array_keys($data['sp_active']['activities']),
+      ));
     }
   }
 }

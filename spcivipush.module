@@ -48,6 +48,11 @@ function spcivipush_init() {
  *     - author
  *     - source
  *     - groups: array(group_id_1, group_id_2, etc.)
+ *     - sp_active: array(
+ *         active,
+ *         activities: array(
+ *         )
+ *       )
  *
  *
  * debug_info: variable content shown in logs.
