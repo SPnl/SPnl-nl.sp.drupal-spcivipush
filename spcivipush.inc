@@ -357,7 +357,7 @@ function spcivipush_add_contact($data, $debug_info) {
 }
 
 function spcivipush_merge_contacts($data, $existing_contact, $debug_info) {
-  if (!empty($data['overwrite']) && !empty($data['contact_id'])) {
+  if (!empty($data['overwrite'])) {
     $overwrite = TRUE;
   }
   else {
