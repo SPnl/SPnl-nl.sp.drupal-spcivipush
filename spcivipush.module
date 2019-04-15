@@ -103,15 +103,34 @@ function spcivipush_menu() {
     'page callback' => 'drupal_get_form',
     'page arguments' => array('spcivipush_settings_form'),
     'file' => 'spcivipush.admin.inc',
-    'access callback' => 'sprbs_access_check',
+    'access callback' => 'spcivipush_access_check',
   );
 
   $items['admin/config/sp/spcivipush/settings'] = array(
     'title' => 'Instellingen',
     'type' => MENU_DEFAULT_LOCAL_TASK,
-    'access callback' => 'sprbs_access_check',
+    'access callback' => 'spcivipush_access_check',
     'weight' => '0',
   );
 
   return $items;
+}
+
+/**
+ * @return bool Has SPRBS configuration access
+ */
+function spcivipush_access_check() {
+  return (user_access('administer site configuration') || user_access('administer sp civipush'));
+}
+
+/**
+ * Definces permission to administer webformsync.
+ */
+function spcivipush_permission() {
+  return array(
+    'administer sp civipush' => array(
+      'title' => 'Beheer SP civipush',
+      'description' => 'Stel in hoe data naar CiviCRM wordt gepushed.',
+    ),
+  );
 }
