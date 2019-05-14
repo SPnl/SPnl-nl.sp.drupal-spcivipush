@@ -1472,11 +1472,25 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
   if (isset($data['country'])) {
     $country_id = array_search($data['country'], $country_ids);
   }
+  // Autosyncable fields.
+  $autosync = array(
+    'street_and_number' => 'street_address',
+    'street' => 'street_name',
+    'house_number' => 'street_number',
+    'house_number_addition' => 'street_unit',
+    'postal_code' => 'postal_code',
+    'locality' => 'city',
+  );
   // Get contact primary address.
   $primary_address = array();
   $primary_address_key = array_search(1, array_column($existing_contact['api.Address.get']['values'], 'is_primary'));
   if ($primary_address_key !== FALSE) {
     $primary_address = $existing_contact['api.Address.get']['values'][$primary_address_key];
+    foreach ($autosync as $key => $civikey) {
+      if (!empty($primary_address[$civikey])) {
+        $original_address[$civikey] = $primary_address[$civikey];
+      }
+    }
   }
 
   // Check if primary address should be added.
@@ -1497,7 +1511,6 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
     $add_new_primary_address = FALSE;
     if (!empty($primary_address)) {
       // check if address is different.
-      $different_address = FALSE;
       if (
         // Existing address not specific to house, and specific address data.
         (
@@ -1538,14 +1551,6 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
     }
     if ($add_new_primary_address) {
       // Add new address.
-      $autosync = array(
-        'street_and_number' => 'street_address',
-        'street' => 'street_name',
-        'house_number' => 'street_number',
-        'house_number_addition' => 'street_unit',
-        'postal_code' => 'postal_code',
-        'locality' => 'city',
-      );
       $params = array(
         'location_type_id' => 1,
         'is_primary' => 1,
@@ -1575,6 +1580,7 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
             $merged_data['address'][$key] = $value;
           };
           $merged_data['address']['primary_text'] = ' primair';
+          $merged_data['original_address'] = $original_address;
         }
       }
     }
@@ -1636,16 +1642,8 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
         else {
           $primary = 0;
           $billing = 0;
-          $location_type_id = 4;
+          $location_type_id = 1;
         }
-        $autosync = array(
-          'street_and_number' => 'street_address',
-          'street' => 'street_name',
-          'house_number' => 'street_number',
-          'house_number_addition' => 'street_unit',
-          'postal_code' => 'postal_code',
-          'locality' => 'city',
-        );
         $params = array(
           'location_type_id' => $location_type_id,
           'is_primary' => $primary,
@@ -1672,6 +1670,7 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
             foreach ($address_merge_fields as $key => $value) {
               $merged_data['address'][$key] = $value;
             };
+            $merged_data['original_address'] = $original_address;
             $merged_data['address']['primary_text'] = $primary ? ' primair' : ' (nog niet ingesteld als primair)';
           }
         }
@@ -1709,7 +1708,7 @@ function spcivipush_merge_create_activities($existing_contact, $data, $overwrite
       !empty($merged_data['address'])
     ) {
       $data_added = TRUE;
-      $text .= "<p>De volgende gegevens zijn toegevoegd:</p>";
+      $text .= "<p>De volgende gegevens zijn toegevoegd of gewijzigd:</p>";
       if (!empty($merged_data['email'])) {
         $text .= '<p>e-mailadres' . $merged_data['email']['primary_text'] . ': ' . check_plain($merged_data['email']['email']) . "</p>";
       }
@@ -1720,7 +1719,14 @@ function spcivipush_merge_create_activities($existing_contact, $data, $overwrite
         $text .= '<p>mobiel telefoonnummer' . $merged_data['phone_mobile']['primary_text'] . ': ' . check_plain($merged_data['phone_mobile']['phone_mobile']) . "</p>";
       }
       if (!empty($merged_data['address'])) {
-        $text .= '<p>adres' . $merged_data['address']['primary_text'] . ':<br/>';
+        if (!empty($merged_data['original_address'])) {
+          $text .= '<p>Oude adres:<br/>';
+          foreach ($merged_data['original_address'] as $value) {
+            $text .= '- ' . check_plain($value) . "<br/>";
+          }
+          $text .= '</p>';
+        }
+        $text .= '<p>Nieuwe adres' . $merged_data['address']['primary_text'] . ':<br/>';
         unset($merged_data['address']['primary_text']);
         foreach ($merged_data['address'] as $value) {
           $text .= '- ' . check_plain($value) . "<br/>";
