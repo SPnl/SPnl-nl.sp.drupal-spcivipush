@@ -73,7 +73,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
   if (
     preg_match('/^Form: .*\(id: [0-9]+, sid: [0-9]+,[^)]+\)$/', $data['source']) ||
     preg_match('/^SP webformsync: .*, sid: [0-9]+ \([^)]+\)$/', $data['source']) ||
-    preg_match('/^SP webformsync: [^(]+\(id: [0-9]+, sid: [0-9]+, url: .*\)$/', $data['source'])
+    preg_match('/^SP webformsync: [^(]+\(id: [0-9]+, sid: [0-9]+.*\)$/', $data['source'])
   ) {
     $params = array(
       'option.limit' => 1,
