@@ -8,7 +8,6 @@
  * Sync contact data.
  */
 function spcivipush_sync_contact($data, $debug_info) {
-  watchdog('spcivipush', 'Received data:<pre>' . print_r($data, TRUE) . '</pre>');
   // Find similar existing contacts in civi.
   $existing_contact = spcivipush_find_existing_contact($data, $debug_info);
   if ($existing_contact !== FALSE) {
@@ -476,12 +475,22 @@ function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
 function spcivipush_parse_data($data) {
   $validated_data = array();
   $push_items = spcivipush_get_data_names();
+  // Set max length for data.
+  $max_string_length = array(
+    'source' => 255,
+  );
   foreach ($push_items as $key => $name) {
     if (isset($data[$key])) {
       $validated_value = call_user_func('spcivipush_valid_' . $key, $data[$key]);
       if (!empty($validated_value)) {
         if (is_string($validated_value)) {
-          $validated_data[$key] = substr($validated_value, 0, 64);
+          if (!empty($max_string_length[$key])) {
+            $length = $max_string_length[$key];
+          }
+          else {
+            $length = 64;
+          }
+          $validated_data[$key] = substr($validated_value, 0, $length);
         }
         else {
           $validated_data[$key] = $validated_value;
