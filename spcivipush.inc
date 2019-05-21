@@ -33,6 +33,13 @@ function spcivipush_sync_contact($data, $debug_info) {
           return $contact_id;
         }
       }
+      if (!empty($data['remove_groups'])) {
+        // Unsubscribe contact from groups.
+        $result = spcivipush_contact_remove_groups($contact_id, $data['remove_groups'], $debug_info);
+        if (!empty($result)) {
+          return $contact_id;
+        }
+      }
       else {
         return $contact_id;
       }
@@ -473,6 +480,34 @@ function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
   return TRUE;
 }
 
+function spcivipush_contact_remove_groups($contact_id, $groups, $debug_info) {
+  $removed_from_groups = FALSE;
+  $spcivi = \SPCivi::getInstance();
+  set_time_limit(60);
+  // Sync met CiviCRM.
+  foreach ($groups as $group_id) {
+    $params = array(
+      'contact_id' => $contact_id,
+      'group_id' => $group_id,
+      'status' => "Removed",
+    );
+    $remove_group_membership = $spcivi->api('GroupContact', 'create', $params);
+    if (_spcivipush_check_result($remove_group_membership, 'groepslidmaatschappen', 'remove', $params, $debug_info)) {
+      $removed_from_groups = TRUE;
+      $removed_groups[] = $group_id;
+    }
+    else {
+      return FALSE;
+    }
+  }
+  if ($removed_from_groups) {
+    $groups_text = implode(', ', $removed_groups);
+    drupal_set_message('Contact nr. '.$contact_id.' was removed from groups ('.$groups_text.').');
+    watchdog('spcivipush', 'Contact nr. '.$contact_id.' was removed from groups ('.$groups_text.').');
+  }
+  return TRUE;
+}
+
 /**
  * Parses submission data with sync info in raw data array to sync.
  */
@@ -644,6 +679,7 @@ function spcivipush_get_data_names() {
     'remote_addr' => 'ip addres auteur',
     'source' => 'bron',
     'groups' => 'groepen',
+    'remove_groups' => 'groepen te verwijderen',
   );
   return $data_names;
 }
@@ -1055,6 +1091,13 @@ function spcivipush_valid_groups($groups) {
   return $groups;
 }
 
+/**
+ * Check if remove_groups is valid.
+ */
+function spcivipush_valid_remove_groups($remove_groups) {
+  return $remove_groups;
+}
+
 
 /**
  * Longer middle names first.
@@ -1064,8 +1107,22 @@ function spcivipush_middle_names() {
 }
 
 function _spcivipush_check_result($result, $dataname, $action, $params = NULL, $debug_info = NULL) {
-  $action_name = ($action === 'get') ? 'ophalen' : 'aanmaken';
-  $place_name = ($action === 'get') ? 'uit' : 'in';
+  switch ($action) {
+    case 'get':
+      $action_name = 'ophalen';
+      $place_name = 'uit';
+      break;
+
+    case 'set':
+      $action_name = 'aanmaken';
+      $place_name = 'in';
+      break;
+
+    case 'remove':
+      $action_name = 'verwijderen';
+      $place_name = 'uit';
+      break;
+  }
   if (!isset($result['is_error']) || $result['is_error'] == 1) {
     drupal_set_message('Fout bij het ' . $action_name . ' van ' . $dataname . ' ' . $place_name . ' CiviCRM.', 'error');
     watchdog('spcivipush', '<p>Fout bij het ' . $action_name . ' van ' . $dataname . ' ' . $place_name . ' CiviCRM.</p>Resultaat:<pre>' . print_r($result, TRUE) . '</pre>Parameters:<pre>' . print_r($params, TRUE) . '</pre>Debug info:<pre>' . print_r($debug_info, TRUE) . '</pre>', array(), WATCHDOG_ERROR);
