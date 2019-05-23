@@ -54,6 +54,9 @@ function spcivipush_init() {
  *         activities: array(
  *         )
  *       )
+ *     - do_not_phone: (true, false)
+ *     - is_opt_out: (true, false)
+ *     - do_not_sms: (true, false)
  *
  *
  * debug_info: variable content shown in logs.

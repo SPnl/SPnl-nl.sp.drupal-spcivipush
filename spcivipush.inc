@@ -26,23 +26,21 @@ function spcivipush_sync_contact($data, $debug_info) {
       $contact_id = spcivipush_merge_contacts($data, $existing_contact, $debug_info);
     }
     if (!empty($contact_id)) {
-      if (!empty($data['groups'])) {
-        // Add contact to groups.
-        $result = spcivipush_contact_add_groups($contact_id, $data['groups'], $debug_info);
-        if (!empty($result)) {
-          return $contact_id;
+      // Sync auto items.
+      $group_items = array(
+        'groups',
+        'remove_groups',
+      );
+      foreach ($group_items as $item) {
+        if (!empty($data[$item])) {
+          $callback = 'spcivipush_contact_' . $item;
+          $result = $callback($contact_id, $data[$item], $debug_info);
+          if (empty($result)) {
+            return FALSE;
+          }
         }
       }
-      if (!empty($data['remove_groups'])) {
-        // Unsubscribe contact from groups.
-        $result = spcivipush_contact_remove_groups($contact_id, $data['remove_groups'], $debug_info);
-        if (!empty($result)) {
-          return $contact_id;
-        }
-      }
-      else {
-        return $contact_id;
-      }
+      return $contact_id;
     }
   }
   return FALSE;
@@ -226,117 +224,22 @@ function spcivipush_add_contact($data, $debug_info) {
   global $base_url;
   $spcivi = \SPCivi::getInstance();
   set_time_limit(60);
-  $sync_items = spcivipush_get_data_names();
+  $params = array();
 
   // Create contact.
-  // Autosync fields than can be autosynced.
-  $autosync = array(
-    'first_name' => 'first_name',
-    'middle_name' => 'middle_name',
-    'last_name' => 'last_name',
-    'email' => 'email',
-    'source' => 'contact_source',
-    'birth_date' => 'birth_date',
-    'gender' => 'gender_id',
-    'initials' => 'custom_111',
-  );
-  $params = array(
-    'contact_type' => 'Individual',
-  );
-  foreach ($autosync as $key => $civikey) {
-    if (!empty($data[$key])) {
-      $params[$civikey] = $data[$key];
-      unset($sync_items[$key]);
-    }
-  }
-  // Make sure last name is set, if data is available.
-  if (empty($data['first_name']) && empty($data['last_name']) && !empty($data['name'])) {
-    $params['last_name'] = $data['name'];
-    $check_name = TRUE;
-  }
-  unset($sync_items['name']);
+  spcivipush_add_contact_data($data, $params);
 
   // If available, add phone.
-  $phone_params = array();
-  if (!empty($data['telephone']) && (empty($data['phone_mobile']) || $data['telephone'] !== $data['phone_mobile'])) {
-    if (empty($data['phone_mobile'])) {
-      $is_primary = 0;
-    }
-    else {
-      $is_primary = 1;
-    }
-    if (strpos($data['telephone'], '06') === 0) {
-      $phone_type_id = 2;
-    }
-    else {
-      $phone_type_id = 1;
-    }
-    $phone_params[] = array(
-      'location_type_id' => 1,
-      'phone' => $data['telephone'],
-      'is_primary' => $is_primary,
-      'phone_type_id' => $phone_type_id,
-    );
-    $params = array_merge($params, array('api.Phone.create' => $phone_params));
-  }
+  spcivipush_add_phone($data, $params);
 
-  // If available, add moble phone.
-  if (!empty($data['phone_mobile'])) {
-    $phone_type_id = 2;
-    $phone_params[] = array(
-      'location_type_id' => 1,
-      'phone' => $data['phone_mobile'],
-      'is_primary' => 1,
-      'phone_type_id' => $phone_type_id,
-    );
-    $params = array_merge($params, array('api.Phone.create' => $phone_params));
-  }
-
-  // If available, add address.
-  $autosync = array(
-    'street_and_number' => 'street_address',
-    'street' => 'street_name',
-    'house_number' => 'street_number',
-    'house_number_addition' => 'street_unit',
-    'postal_code' => 'postal_code',
-    'locality' => 'city',
-  );
-  $address_params = array(
-    'location_type_id' => 1,
-    'is_primary' => 1,
-  );
-
-  // Get country ID.
-  if (!empty($data['country'])) {
-    $country_id = array_search($data['country'], spcivipush_get_country_ids());
-  }
-
-  if (empty($country_id)) {
-    $address_params['country_id'] = 1152;
-  }
-  else {
-    $address_params['country_id'] = $country_id;
-  }
-  $address_data_found = FALSE;
-  foreach ($autosync as $key => $civikey) {
-    if (!empty($data[$key])) {
-      $address_params[$civikey] = $data[$key];
-      $address_data_found = TRUE;
-    }
-  }
-  if ($address_data_found) {
-    $params = array_merge($params, array('api.Address.create' => $address_params));
-  }
+  // Add address.
+  spcivipush_add_address($data, $params);
 
   // Add notes.
-  if (spcivipush_add_notes(NULL, $data, $params, $debug_info) === FALSE) {
-    return FALSE;
-  }
+  spcivipush_add_notes(NULL, $data, $params, $debug_info);
 
   // Add sp_active.
-  if (spcivipush_add_sp_active($data, $params) === FALSE) {
-    return FALSE;
-  }
+  spcivipush_add_sp_active($data, $params);
 
   // Add unverified tag.
   $tag_id = variable_get('spcivipush_unverified_tag', FALSE);
@@ -347,6 +250,13 @@ function spcivipush_add_contact($data, $debug_info) {
     $params = array_merge($params, array('api.EntityTag.create' => $tag_params));
   }
 
+  // Add is_opt_out, do_not_phone, and do_not_sms.
+  $do_not_items = spcivipush_do_not_items();
+  foreach ($do_not_items as $do_not_item) {
+    spcivipush_add_do_not($data, $params, $do_not_item);
+  }
+
+  $params['debug'] = 1;
   // Create contact.
   $create_contact_results = $spcivi->api('Contact', 'create', $params);
   if (_spcivipush_check_result($create_contact_results, 'een contact', 'create', $params, $debug_info)) {
@@ -427,6 +337,12 @@ function spcivipush_merge_contacts($data, $existing_contact, $debug_info) {
       // Add sp_active.
       spcivipush_add_sp_active($data, $merge_params);
 
+      // Add is_opt_out, do_not_phone, and do_not_sms.
+      $do_not_items = spcivipush_do_not_items();
+      foreach ($do_not_items as $do_not_item) {
+        spcivipush_add_do_not($data, $merge_params, $do_not_item);
+      }
+
       // Merge contact.
       $create_contact_results = $spcivi->api('Contact', 'create', $merge_params);
       if (_spcivipush_check_result($create_contact_results, 'contacten', 'create', $merge_params, $debug_info)) {
@@ -453,7 +369,10 @@ function spcivipush_merge_contacts($data, $existing_contact, $debug_info) {
   return FALSE;
 }
 
-function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
+/**
+ * Add groups.
+ */
+function spcivipush_contact_groups($contact_id, $groups, $debug_info) {
   $added_to_groups = FALSE;
   $spcivi = \SPCivi::getInstance();
   set_time_limit(60);
@@ -480,6 +399,9 @@ function spcivipush_contact_add_groups($contact_id, $groups, $debug_info) {
   return TRUE;
 }
 
+/**
+ * Remove groups.
+ */
 function spcivipush_contact_remove_groups($contact_id, $groups, $debug_info) {
   $removed_from_groups = FALSE;
   $spcivi = \SPCivi::getInstance();
@@ -680,6 +602,9 @@ function spcivipush_get_data_names() {
     'source' => 'bron',
     'groups' => 'groepen',
     'remove_groups' => 'groepen te verwijderen',
+    'is_opt_out' => 'Geen mails',
+    'do_not_phone' => 'Niet bellen',
+    'do_not_sms' => "niet sms'en",
   );
   return $data_names;
 }
@@ -1098,6 +1023,26 @@ function spcivipush_valid_remove_groups($remove_groups) {
   return $remove_groups;
 }
 
+/**
+ * Check if is_opt_out is valid.
+ */
+function spcivipush_valid_is_opt_out($is_opt_out) {
+  return $is_opt_out;
+}
+
+/**
+ * Check if do_not_phone is valid.
+ */
+function spcivipush_valid_do_not_phone($do_not_phone) {
+  return $do_not_phone;
+}
+
+/**
+ * Check if do_not_sms is valid.
+ */
+function spcivipush_valid_do_not_sms($do_not_sms) {
+  return $do_not_sms;
+}
 
 /**
  * Longer middle names first.
@@ -1113,7 +1058,7 @@ function _spcivipush_check_result($result, $dataname, $action, $params = NULL, $
       $place_name = 'uit';
       break;
 
-    case 'set':
+    case 'create':
       $action_name = 'aanmaken';
       $place_name = 'in';
       break;
@@ -1245,6 +1190,120 @@ function spcivipush_get_caller_text($debug_info) {
   }
 }
 
+/**
+ * Add contact_data.
+ */
+function spcivipush_add_contact_data($data, &$params) {
+  $sync_items = spcivipush_get_data_names();
+  // Autosync fields than can be autosynced.
+  $autosync = array(
+    'first_name' => 'first_name',
+    'middle_name' => 'middle_name',
+    'last_name' => 'last_name',
+    'email' => 'email',
+    'source' => 'contact_source',
+    'birth_date' => 'birth_date',
+    'gender' => 'gender_id',
+    'initials' => 'custom_111',
+  );
+  $params['contact_type'] = 'Individual';
+  foreach ($autosync as $key => $civikey) {
+    if (!empty($data[$key])) {
+      $params[$civikey] = $data[$key];
+      unset($sync_items[$key]);
+    }
+  }
+  // Make sure last name is set, if data is available.
+  if (empty($data['first_name']) && empty($data['last_name']) && !empty($data['name'])) {
+    $params['last_name'] = $data['name'];
+    $check_name = TRUE;
+  }
+}
+
+/**
+ * Add phone.
+ */
+function spcivipush_add_phone($data, &$params) {
+  $phone_params = array();
+  if (!empty($data['telephone']) && (empty($data['phone_mobile']) || $data['telephone'] !== $data['phone_mobile'])) {
+    if (empty($data['phone_mobile'])) {
+      $is_primary = 0;
+    }
+    else {
+      $is_primary = 1;
+    }
+    if (strpos($data['telephone'], '06') === 0) {
+      $phone_type_id = 2;
+    }
+    else {
+      $phone_type_id = 1;
+    }
+    $phone_params[] = array(
+      'location_type_id' => 1,
+      'phone' => $data['telephone'],
+      'is_primary' => $is_primary,
+      'phone_type_id' => $phone_type_id,
+    );
+    $params = array_merge($params, array('api.Phone.create' => $phone_params));
+  }
+
+  // If available, add moble phone.
+  if (!empty($data['phone_mobile'])) {
+    $phone_type_id = 2;
+    $phone_params[] = array(
+      'location_type_id' => 1,
+      'phone' => $data['phone_mobile'],
+      'is_primary' => 1,
+      'phone_type_id' => $phone_type_id,
+    );
+    $params = array_merge($params, array('api.Phone.create' => $phone_params));
+  }
+}
+
+/**
+ * Add address.
+ */
+function spcivipush_add_address($data, &$params) {
+  // If available, add address.
+  $autosync = array(
+    'street_and_number' => 'street_address',
+    'street' => 'street_name',
+    'house_number' => 'street_number',
+    'house_number_addition' => 'street_unit',
+    'postal_code' => 'postal_code',
+    'locality' => 'city',
+  );
+  $address_params = array(
+    'location_type_id' => 1,
+    'is_primary' => 1,
+  );
+
+  // Get country ID.
+  if (!empty($data['country'])) {
+    $country_id = array_search($data['country'], spcivipush_get_country_ids());
+  }
+
+  if (empty($country_id)) {
+    $address_params['country_id'] = 1152;
+  }
+  else {
+    $address_params['country_id'] = $country_id;
+  }
+  $address_data_found = FALSE;
+  foreach ($autosync as $key => $civikey) {
+    if (!empty($data[$key])) {
+      $address_params[$civikey] = $data[$key];
+      $address_data_found = TRUE;
+    }
+  }
+  if ($address_data_found) {
+    $params = array_merge($params, array('api.Address.create' => $address_params));
+  }
+}
+
+/**
+ * Add notes.
+ */
 function spcivipush_add_notes($existing_contact, $data, &$merge_params, $debug_info) {
   // If available add note.
   if (!empty($data['notes'])) {
@@ -1306,6 +1365,17 @@ function spcivipush_add_sp_active($data, &$params) {
   }
 }
 
+/**
+ * Do not.
+ */
+function spcivipush_add_do_not($data, &$params, $type) {
+  if (!empty($data[$type])) {
+    watchdog('spcivipush', 'Set privacy option @type', array('@type' => $type));
+    drupal_set_message('Set privacy option ' . $type);
+    $params = array_merge($params, array($type => 1));
+  }
+}
+
 function spcivipush_merge_name($existing_contact, $data, $overwrite, &$merge_params, &$merged_data, $debug_info) {
   $contact_id = $existing_contact['id'];
   // check if new name data.
@@ -1329,7 +1399,7 @@ function spcivipush_merge_name($existing_contact, $data, $overwrite, &$merge_par
       // Check if newname is caps locked.
       if (strtoupper($new_name) !== $new_name) {
         // Check if old name contains new name.
-        if(strpos($old_name, $new_name) === FALSE) {
+        if (strpos($old_name, $new_name) === FALSE) {
           // Check if new name only first letter.
           if (
             !(
@@ -1749,6 +1819,9 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
   }
 }
 
+/**
+ * Merge create activities.
+ */
 function spcivipush_merge_create_activities($existing_contact, $data, $overwrite, $merged_data, $debug_info) {
   $contact_id = $existing_contact['id'];
   // Create activities.
@@ -1819,6 +1892,9 @@ function spcivipush_merge_create_activities($existing_contact, $data, $overwrite
   }
 }
 
+/**
+ * Get country ids.
+ */
 function spcivipush_get_country_ids() {
   $codes = &drupal_static(__FUNCTION__);
   if (!isset($codes)) {
@@ -1841,4 +1917,15 @@ function spcivipush_get_country_ids() {
     }
   }
   return $codes;
+}
+
+/**
+ * Do not items.
+ */
+function spcivipush_do_not_items() {
+  return array(
+    'is_opt_out',
+    'do_not_phone',
+    'do_not_sms',
+  );
 }
