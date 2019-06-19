@@ -1514,9 +1514,7 @@ function spcivipush_merge_birth_date($existing_contact, $data, $overwrite, &$mer
   if (!empty($data['birth_date'])) {
     // Check if birth date is already set.
     if (empty($existing_contact['birth_date']) || $overwrite) {
-      // Add email.
       $merge_params['birth_date'] = $data['birth_date'];
-      $merged_data['birth_date'] = $data['birth_date'];
     }
   }
 }
@@ -1848,9 +1846,6 @@ function spcivipush_merge_create_activities($existing_contact, $data, $overwrite
     }
     if (!empty($merged_data['initials'])) {
       $text .= '<p>Initialen zijn toegevoegd: ' . check_plain($merged_data['initials']) . '.</p>';
-    }
-    if (!empty($merged_data['birth_date'])) {
-      $text .= '<p>Geboortedatum is toegevoegd: ' . check_plain($merged_data['birth_date']) . '.</p>';
     }
     if (!empty($merged_data['gender'])) {
       $text .= '<p>Geslacht informatie is toegevoegd: ' . check_plain($merged_data['gender']) . '.</p>';
