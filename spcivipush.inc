@@ -69,9 +69,6 @@ function spcivipush_find_existing_contact($data, $debug_info) {
         return $existing_contact;
       }
     }
-    else {
-      return FALSE;
-    }
   }
 
   // Find existing contact based on source (webform).
