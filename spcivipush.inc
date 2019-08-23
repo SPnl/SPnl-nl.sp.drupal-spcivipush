@@ -241,6 +241,9 @@ function spcivipush_add_contact($data, $debug_info) {
   // Add sp_active.
   spcivipush_add_sp_active($data, $params);
 
+  // Add sp_work_and_int.
+  spcivipush_add_sp_work_and_int($data, $params);
+
   // Add unverified tag.
   $tag_id = variable_get('spcivipush_unverified_tag', FALSE);
   if (!empty($tag_id)) {
@@ -337,6 +340,9 @@ function spcivipush_merge_contacts($data, $existing_contact, $debug_info) {
 
       // Add sp_active.
       spcivipush_add_sp_active($data, $merge_params);
+
+      // Add sp_work_and_int.
+      spcivipush_add_sp_work_and_int($data, $merge_params);
 
       // Add is_opt_out, do_not_phone, and do_not_sms.
       $do_not_items = spcivipush_do_not_items();
@@ -537,11 +543,24 @@ function spcivipush_parse_data($data) {
   if (!empty($data['sp_active']) && !empty($data['sp_active']['active'])) {
     $validated_data['sp_active'] = $data['sp_active'];
   }
+
+  // Add sp_work_and_int.
+  if (!empty($data['sp_work_and_int']) &&
+    (
+      !empty($data['sp_work_and_int']['main_task']) ||
+      !empty($data['sp_work_and_int']['industrial_sector']) ||
+      !empty($data['sp_work_and_int']['occupational_group']) ||
+      !empty($data['sp_work_and_int']['membership'])
+    )
+  ) {
+    $validated_data['sp_work_and_int'] = $data['sp_work_and_int'];
+  }
+
   return $validated_data;
 }
 
 /**
- * Checks if the address data is sufficient
+ * Checks if the address data is sufficient.
  */
 function spcivipush_check_address_sufficient($data) {
   // Check for: Testlaan 1 (street_and_number), Amsterdam (locality)
@@ -1366,6 +1385,9 @@ function spcivipush_add_notes($existing_contact, $data, &$merge_params, $debug_i
   }
 }
 
+/**
+ * Adds sp active data to civicrm api params.
+ */
 function spcivipush_add_sp_active($data, &$params) {
   if (!empty($data['sp_active'])) {
     if (!empty($data['sp_active']['active'])) {
@@ -1373,6 +1395,30 @@ function spcivipush_add_sp_active($data, &$params) {
         'custom_178' => $data['sp_active']['active'],
         'custom_179' => array_keys($data['sp_active']['activities']),
       ));
+    }
+  }
+}
+
+/**
+ * Adds sp work and interests data to civicrm api params.
+ */
+function spcivipush_add_sp_work_and_int($data, &$params) {
+  if (!empty($data['sp_work_and_int'])) {
+    $to_merge = array();
+    if (!empty($data['sp_work_and_int']['main_task'])) {
+      $to_merge['custom_176'] = array_keys($data['sp_work_and_int']['main_task']);
+    }
+    if (!empty($data['sp_work_and_int']['industrial_sector'])) {
+      $to_merge['custom_174'] = $data['sp_work_and_int']['industrial_sector'];
+    }
+    if (!empty($data['sp_work_and_int']['occupational_group'])) {
+      $to_merge['custom_175'] = $data['sp_work_and_int']['occupational_group'];
+    }
+    if (!empty($data['sp_work_and_int']['membership'])) {
+      $to_merge['custom_177'] = array_keys($data['sp_work_and_int']['membership']);
+    }
+    if (!empty($to_merge)) {
+      $params = array_merge($params, $to_merge);
     }
   }
 }

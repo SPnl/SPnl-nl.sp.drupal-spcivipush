@@ -54,6 +54,12 @@ function spcivipush_init() {
  *         activities: array(
  *         )
  *       )
+ *     - sp_work_and_int: array(
+ *         main_task: array(),
+ *         industrial_sector,
+ *         occupational_group ,
+ *         membership: array(),
+ *       )
  *     - do_not_phone: (true, false)
  *     - is_opt_out: (true, false)
  *     - do_not_sms: (true, false)
