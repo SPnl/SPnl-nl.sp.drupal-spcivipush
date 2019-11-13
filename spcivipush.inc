@@ -540,7 +540,7 @@ function spcivipush_parse_data($data) {
   }
 
   // Add sp_active.
-  if (!empty($data['sp_active']) && !empty($data['sp_active']['active'])) {
+  if (!empty($data['sp_active']) && isset($data['sp_active']['active'])) {
     $validated_data['sp_active'] = $data['sp_active'];
   }
 
