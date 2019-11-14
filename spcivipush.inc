@@ -1390,10 +1390,14 @@ function spcivipush_add_notes($existing_contact, $data, &$merge_params, $debug_i
  * Adds sp active data to civicrm api params.
  */
 function spcivipush_add_sp_active($data, &$params) {
-  if (!empty($data['sp_active'])) {
-    if (!empty($data['sp_active']['active'])) {
+  if (isset($data['sp_active'])) {
+    if (isset($data['sp_active']['active'])) {
       $params = array_merge($params, array(
         'custom_178' => $data['sp_active']['active'],
+      ));
+    }
+    if (isset($data['sp_active']['activities'])) {
+      $params = array_merge($params, array(
         'custom_179' => array_keys($data['sp_active']['activities']),
       ));
     }
