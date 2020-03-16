@@ -356,7 +356,9 @@ function spcivipush_merge_contacts($data, $existing_contact, $debug_info) {
         if (!empty($create_contact_results['values'])) {
 
           // Create activities.
-          spcivipush_merge_create_activities($full_existing_contact, $data, $overwrite, $merged_data, $debug_info);
+          if ($debug_info !== 'Lidworden formulier') {
+            spcivipush_merge_create_activities($full_existing_contact, $data, $overwrite, $merged_data, $debug_info);
+          }
 
           // Feedback.
           if (!empty($create_contact_results['values'][0]['api.CustomValue.create'])) {
