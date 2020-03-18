@@ -451,19 +451,38 @@ function spcivipush_parse_data($data) {
   );
   foreach ($push_items as $key => $name) {
     if (isset($data[$key])) {
-      $validated_value = call_user_func('spcivipush_valid_' . $key, $data[$key]);
-      if (!empty($validated_value)) {
-        if (is_string($validated_value)) {
-          if (!empty($max_string_length[$key])) {
-            $length = $max_string_length[$key];
+      // Check if invalid characters in data.
+      if (in_array($key, array(
+        'name',
+        'first_name',
+        'middle_name',
+        'last_name',
+        'initials',
+        'street',
+        'house_number',
+        'house_number_addition',
+        'street_and_number',
+        'postal_code',
+        'locality',
+      )) && spcivipush_contains_invalid_characters($data[$key])) {
+        continue;
+      }
+      else {
+        // Validate data with special function.
+        $validated_value = call_user_func('spcivipush_valid_' . $key, $data[$key]);
+        if (!empty($validated_value)) {
+          if (is_string($validated_value)) {
+            if (!empty($max_string_length[$key])) {
+              $length = $max_string_length[$key];
+            }
+            else {
+              $length = 64;
+            }
+            $validated_data[$key] = substr($validated_value, 0, $length);
           }
           else {
-            $length = 64;
+            $validated_data[$key] = $validated_value;
           }
-          $validated_data[$key] = substr($validated_value, 0, $length);
-        }
-        else {
-          $validated_data[$key] = $validated_value;
         }
       }
     }
@@ -595,8 +614,7 @@ function spcivipush_check_submission_sufficient($data) {
   if (
     !empty($data['first_name']) ||
     !empty($data['last_name'])||
-    !empty($data['name']) ||
-    !empty($data['email'])
+    !empty($data['name'])
   ) {
     if (!empty($data['email']) || !empty($data['telephone']) || spcivipush_check_address_sufficient($data) || !empty($data['birth_date'])) {
       return TRUE;
@@ -781,11 +799,9 @@ function spcivipush_valid_contact_id($contact_id) {
  * Check if name is valid.
  */
 function spcivipush_valid_name($name) {
-  if (strpos($name, '?') === FALSE) {
-    $name = trim(preg_replace('!\s+!', ' ', $name));
-    if (!empty($name)) {
-      return $name;
-    }
+  $name = trim(preg_replace('!\s+!', ' ', $name));
+  if (!empty($name)) {
+    return $name;
   }
 }
 
@@ -793,11 +809,9 @@ function spcivipush_valid_name($name) {
  * Check if first name is valid.
  */
 function spcivipush_valid_first_name($first_name) {
-  if (strpos($first_name, '?') === FALSE) {
-    $first_name = trim(preg_replace('!\s+!', ' ', $first_name));
-    if (!empty($first_name)) {
-      return $first_name;
-    }
+  $first_name = trim(preg_replace('!\s+!', ' ', $first_name));
+  if (!empty($first_name)) {
+    return $first_name;
   }
 }
 
@@ -805,11 +819,9 @@ function spcivipush_valid_first_name($first_name) {
  * Check if middle name is valid.
  */
 function spcivipush_valid_middle_name($middle_name) {
-  if (strpos($middle_name, '?') === FALSE) {
-    $middle_name = trim(preg_replace('!\s+!', ' ', $middle_name));
-    if (!empty($middle_name)) {
-      return $middle_name;
-    }
+  $middle_name = trim(preg_replace('!\s+!', ' ', $middle_name));
+  if (!empty($middle_name)) {
+    return $middle_name;
   }
 }
 
@@ -817,11 +829,9 @@ function spcivipush_valid_middle_name($middle_name) {
  * Check if last name is valid.
  */
 function spcivipush_valid_last_name($last_name) {
-  if (strpos($last_name, '?') === FALSE) {
-    $last_name = trim(preg_replace('!\s+!', ' ', $last_name));
-    if (!empty($last_name)) {
-      return $last_name;
-    }
+  $last_name = trim(preg_replace('!\s+!', ' ', $last_name));
+  if (!empty($last_name)) {
+    return $last_name;
   }
 }
 
@@ -829,12 +839,10 @@ function spcivipush_valid_last_name($last_name) {
  * Check if initials are valid.
  */
 function spcivipush_valid_initials($initials) {
-  if (strpos($initials, '?') === FALSE) {
-    $initials = strtoupper(preg_replace('![^A-Z]!', '', $initials));
-    if (!empty($initials)) {
-      $initials = implode('.', str_split($initials));
-      return $initials;
-    }
+  $initials = strtoupper(preg_replace('![^A-Z]!', '', $initials));
+  if (!empty($initials)) {
+    $initials = implode('.', str_split($initials));
+    return $initials;
   }
 }
 
@@ -842,11 +850,9 @@ function spcivipush_valid_initials($initials) {
  * Check if email is valid.
  */
 function spcivipush_valid_email($email) {
-  if (strpos($email, '?') === FALSE) {
-    $email = trim($email);
-    if (valid_email_address($email)) {
-      return strtolower($email);
-    }
+  $email = trim($email);
+  if (valid_email_address($email)) {
+    return strtolower($email);
   }
 }
 
@@ -914,12 +920,10 @@ function spcivipush_valid_phone_mobile($phone_mobile) {
  * Check if street is valid.
  */
 function spcivipush_valid_street($street) {
-  if (strpos($street, '?') === FALSE) {
-    $street = trim($street);
-    $street = ucfirst($street);
-    if (!empty($street)) {
-      return $street;
-    }
+  $street = trim($street);
+  $street = ucfirst($street);
+  if (!empty($street)) {
+    return $street;
   }
 }
 
@@ -927,13 +931,11 @@ function spcivipush_valid_street($street) {
  * Check if house number is valid.
  */
 function spcivipush_valid_house_number($house_number) {
-  if (strpos($house_number, '?') === FALSE) {
-    // Allow house number and addition, split when parsing data.
-    $house_number = trim($house_number);
-    $regex = "@^[0-9]{1,5}([^0-9].*)?$@";
-    if (preg_match($regex, $house_number)) {
-      return $house_number;
-    }
+  // Allow house number and addition, split when parsing data.
+  $house_number = trim($house_number);
+  $regex = "@^[0-9]{1,5}([^0-9].*)?$@";
+  if (preg_match($regex, $house_number)) {
+    return $house_number;
   }
 }
 
@@ -941,11 +943,9 @@ function spcivipush_valid_house_number($house_number) {
  * Check if house number addition is valid.
  */
 function spcivipush_valid_house_number_addition($house_number_addition) {
-  if (strpos($house_number_addition, '?') === FALSE) {
-    $house_number_addition = trim($house_number_addition);
-    if (isset($house_number_addition) && strlen($house_number_addition) > 0 && strlen($house_number_addition) <= 16) {
-      return $house_number_addition;
-    }
+  $house_number_addition = trim($house_number_addition);
+  if (isset($house_number_addition) && strlen($house_number_addition) > 0 && strlen($house_number_addition) <= 16) {
+    return $house_number_addition;
   }
 }
 
@@ -953,12 +953,10 @@ function spcivipush_valid_house_number_addition($house_number_addition) {
  * Check if street and number is valid.
  */
 function spcivipush_valid_street_and_number($street_and_number) {
-  if (strpos($street_and_number, '?') === FALSE) {
-    $street_and_number = trim($street_and_number);
-    $street_and_number = ucfirst($street_and_number);
-    if (!empty($street_and_number)) {
-      return $street_and_number;
-    }
+  $street_and_number = trim($street_and_number);
+  $street_and_number = ucfirst($street_and_number);
+  if (!empty($street_and_number)) {
+    return $street_and_number;
   }
 }
 
@@ -966,11 +964,9 @@ function spcivipush_valid_street_and_number($street_and_number) {
  * Check if postal code is valid.
  */
 function spcivipush_valid_postal_code($postal_code) {
-  if (strpos($postal_code, '?') === FALSE) {
-    $postal_code = trim($postal_code);
-    if (!empty($postal_code)) {
-      return $postal_code;
-    }
+  $postal_code = trim($postal_code);
+  if (!empty($postal_code)) {
+    return $postal_code;
   }
 }
 
@@ -978,12 +974,10 @@ function spcivipush_valid_postal_code($postal_code) {
  * Check if locality is valid.
  */
 function spcivipush_valid_locality($locality) {
-  if (strpos($locality, '?') === FALSE) {
-    $locality = trim($locality);
-    $locality = strtoupper($locality);
-    if (!empty($locality)) {
-      return $locality;
-    }
+  $locality = trim($locality);
+  $locality = strtoupper($locality);
+  if (!empty($locality)) {
+    return $locality;
   }
 }
 
@@ -2028,4 +2022,17 @@ function spcivipush_get_civi_domain() {
     }
   }
   return 'spnet.nl';
+}
+
+/**
+ * Return invalid characters.
+ */
+function spcivipush_contains_invalid_characters($value) {
+  $regex = '/[0123456789?!@#$%^&*(){}[\];:<>]+/';
+  if (preg_match($regex, $value) === 1) {
+    return TRUE;
+  }
+  else {
+    return FALSE;
+  }
 }
