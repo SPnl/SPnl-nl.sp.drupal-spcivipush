@@ -781,9 +781,11 @@ function spcivipush_valid_contact_id($contact_id) {
  * Check if name is valid.
  */
 function spcivipush_valid_name($name) {
-  $name = trim(preg_replace('!\s+!', ' ', $name));
-  if (!empty($name)) {
-    return $name;
+  if (strpos($name, '?') === FALSE) {
+    $name = trim(preg_replace('!\s+!', ' ', $name));
+    if (!empty($name)) {
+      return $name;
+    }
   }
 }
 
@@ -791,9 +793,11 @@ function spcivipush_valid_name($name) {
  * Check if first name is valid.
  */
 function spcivipush_valid_first_name($first_name) {
-  $first_name = trim(preg_replace('!\s+!', ' ', $first_name));
-  if (!empty($first_name)) {
-    return $first_name;
+  if (strpos($first_name, '?') === FALSE) {
+    $first_name = trim(preg_replace('!\s+!', ' ', $first_name));
+    if (!empty($first_name)) {
+      return $first_name;
+    }
   }
 }
 
@@ -801,9 +805,11 @@ function spcivipush_valid_first_name($first_name) {
  * Check if middle name is valid.
  */
 function spcivipush_valid_middle_name($middle_name) {
-  $middle_name = trim(preg_replace('!\s+!', ' ', $middle_name));
-  if (!empty($middle_name)) {
-    return $middle_name;
+  if (strpos($middle_name, '?') === FALSE) {
+    $middle_name = trim(preg_replace('!\s+!', ' ', $middle_name));
+    if (!empty($middle_name)) {
+      return $middle_name;
+    }
   }
 }
 
@@ -811,9 +817,11 @@ function spcivipush_valid_middle_name($middle_name) {
  * Check if last name is valid.
  */
 function spcivipush_valid_last_name($last_name) {
-  $last_name = trim(preg_replace('!\s+!', ' ', $last_name));
-  if (!empty($last_name)) {
-    return $last_name;
+  if (strpos($last_name, '?') === FALSE) {
+    $last_name = trim(preg_replace('!\s+!', ' ', $last_name));
+    if (!empty($last_name)) {
+      return $last_name;
+    }
   }
 }
 
@@ -821,10 +829,12 @@ function spcivipush_valid_last_name($last_name) {
  * Check if initials are valid.
  */
 function spcivipush_valid_initials($initials) {
-  $initials = strtoupper(preg_replace('![^A-Z]!', '', $initials));
-  if (!empty($initials)) {
-    $initials = implode('.', str_split($initials));
-    return $initials;
+  if (strpos($initials, '?') === FALSE) {
+    $initials = strtoupper(preg_replace('![^A-Z]!', '', $initials));
+    if (!empty($initials)) {
+      $initials = implode('.', str_split($initials));
+      return $initials;
+    }
   }
 }
 
@@ -832,9 +842,11 @@ function spcivipush_valid_initials($initials) {
  * Check if email is valid.
  */
 function spcivipush_valid_email($email) {
-  $email = trim($email);
-  if (valid_email_address($email)) {
-    return strtolower($email);
+  if (strpos($email, '?') === FALSE) {
+    $email = trim($email);
+    if (valid_email_address($email)) {
+      return strtolower($email);
+    }
   }
 }
 
@@ -902,10 +914,12 @@ function spcivipush_valid_phone_mobile($phone_mobile) {
  * Check if street is valid.
  */
 function spcivipush_valid_street($street) {
-  $street = trim($street);
-  $street = ucfirst($street);
-  if (!empty($street)) {
-    return $street;
+  if (strpos($street, '?') === FALSE) {
+    $street = trim($street);
+    $street = ucfirst($street);
+    if (!empty($street)) {
+      return $street;
+    }
   }
 }
 
@@ -913,11 +927,13 @@ function spcivipush_valid_street($street) {
  * Check if house number is valid.
  */
 function spcivipush_valid_house_number($house_number) {
-  // Allow house number and addition, split when parsing data.
-  $house_number = trim($house_number);
-  $regex = "@^[0-9]{1,5}([^0-9].*)?$@";
-  if (preg_match($regex, $house_number)) {
-    return $house_number;
+  if (strpos($house_number, '?') === FALSE) {
+    // Allow house number and addition, split when parsing data.
+    $house_number = trim($house_number);
+    $regex = "@^[0-9]{1,5}([^0-9].*)?$@";
+    if (preg_match($regex, $house_number)) {
+      return $house_number;
+    }
   }
 }
 
@@ -925,9 +941,11 @@ function spcivipush_valid_house_number($house_number) {
  * Check if house number addition is valid.
  */
 function spcivipush_valid_house_number_addition($house_number_addition) {
-  $house_number_addition = trim($house_number_addition);
-  if (isset($house_number_addition) && strlen($house_number_addition) > 0 && strlen($house_number_addition) <= 16) {
-    return $house_number_addition;
+  if (strpos($house_number_addition, '?') === FALSE) {
+    $house_number_addition = trim($house_number_addition);
+    if (isset($house_number_addition) && strlen($house_number_addition) > 0 && strlen($house_number_addition) <= 16) {
+      return $house_number_addition;
+    }
   }
 }
 
@@ -935,10 +953,12 @@ function spcivipush_valid_house_number_addition($house_number_addition) {
  * Check if street and number is valid.
  */
 function spcivipush_valid_street_and_number($street_and_number) {
-  $street_and_number = trim($street_and_number);
-  $street_and_number = ucfirst($street_and_number);
-  if (!empty($street_and_number)) {
-    return $street_and_number;
+  if (strpos($street_and_number, '?') === FALSE) {
+    $street_and_number = trim($street_and_number);
+    $street_and_number = ucfirst($street_and_number);
+    if (!empty($street_and_number)) {
+      return $street_and_number;
+    }
   }
 }
 
@@ -946,9 +966,11 @@ function spcivipush_valid_street_and_number($street_and_number) {
  * Check if postal code is valid.
  */
 function spcivipush_valid_postal_code($postal_code) {
-  $postal_code = trim($postal_code);
-  if (!empty($postal_code)) {
-    return $postal_code;
+  if (strpos($postal_code, '?') === FALSE) {
+    $postal_code = trim($postal_code);
+    if (!empty($postal_code)) {
+      return $postal_code;
+    }
   }
 }
 
@@ -956,10 +978,12 @@ function spcivipush_valid_postal_code($postal_code) {
  * Check if locality is valid.
  */
 function spcivipush_valid_locality($locality) {
-  $locality = trim($locality);
-  $locality = strtoupper($locality);
-  if (!empty($locality)) {
-    return $locality;
+  if (strpos($locality, '?') === FALSE) {
+    $locality = trim($locality);
+    $locality = strtoupper($locality);
+    if (!empty($locality)) {
+      return $locality;
+    }
   }
 }
 
