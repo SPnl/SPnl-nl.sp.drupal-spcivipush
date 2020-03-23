@@ -467,6 +467,15 @@ function spcivipush_parse_data($data) {
       )) && spcivipush_contains_invalid_characters($data[$key])) {
         continue;
       }
+      elseif (in_array($key, array(
+        'name',
+        'first_name',
+        'middle_name',
+        'last_name',
+        'initials',
+      )) && spcivipush_contains_numbers($data[$key])) {
+        continue;
+      }
       else {
         // Validate data with special function.
         $validated_value = call_user_func('spcivipush_valid_' . $key, $data[$key]);
@@ -2028,11 +2037,18 @@ function spcivipush_get_civi_domain() {
  * Return invalid characters.
  */
 function spcivipush_contains_invalid_characters($value) {
-  $regex = '/[0123456789?!@#$%^&*(){}[\];:<>]+/';
+  $regex = '/[?!@#$%^&*(){}[\];:<>]+/';
   if (preg_match($regex, $value) === 1) {
     return TRUE;
   }
   else {
     return FALSE;
   }
+}
+
+/**
+ * Return true if string contains number.
+ */
+function spcivipush_contains_numbers($String){
+    return preg_match('/\\d/', $String) > 0;
 }
