@@ -2037,7 +2037,7 @@ function spcivipush_get_civi_domain() {
  * Return invalid characters.
  */
 function spcivipush_contains_invalid_characters($value) {
-  $regex = '/[?!@#$%^&*(){}[\];:<>]+/';
+  $regex = '/[?!@#$%^*(){}[\];:<>]+/';
   if (preg_match($regex, $value) === 1) {
     return TRUE;
   }
