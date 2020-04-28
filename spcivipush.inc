@@ -451,6 +451,10 @@ function spcivipush_parse_data($data) {
   );
   foreach ($push_items as $key => $name) {
     if (isset($data[$key])) {
+      // Remove emojis.
+      if (!is_array($data[$key]) && !is_bool($data[$key])) {
+        spcivipush_remove_emojis($data[$key]);
+      }
       // Check if invalid characters in data.
       if (in_array($key, array(
         'name',
@@ -2049,6 +2053,17 @@ function spcivipush_contains_invalid_characters($value) {
 /**
  * Return true if string contains number.
  */
-function spcivipush_contains_numbers($String){
-    return preg_match('/\\d/', $String) > 0;
+function spcivipush_contains_numbers($String) {
+  return preg_match('/\\d/', $String) > 0;
+}
+
+/**
+ * Remove emojis.
+ */
+function spcivipush_remove_emojis(&$string) {
+  $emojiregex = '%([*#0-9](?>\\xEF\\xB8\\x8F)?\\xE2\\x83\\xA3|\\xC2[\\xA9\\xAE]|\\xE2..(\\xF0\\x9F\\x8F[\\xBB-\\xBF])?(?>\\xEF\\xB8\\x8F)?|\\xE3(?>\\x80[\\xB0\\xBD]|\\x8A[\\x97\\x99])(?>\\xEF\\xB8\\x8F)?|\\xF0\\x9F(?>[\\x80-\\x86].(?>\\xEF\\xB8\\x8F)?|\\x87.\\xF0\\x9F\\x87.|..(\\xF0\\x9F\\x8F[\\xBB-\\xBF])?|(((?<zwj>\\xE2\\x80\\x8D)\\xE2\\x9D\\xA4\\xEF\\xB8\\x8F\k<zwj>\\xF0\\x9F..(\k<zwj>\\xF0\\x9F\\x91.)?|(\\xE2\\x80\\x8D\\xF0\\x9F\\x91.){2,3}))?))%';
+  $result = preg_replace($emojiregex, '', $string);
+  if ($result !== false) {
+    $string = $result;
+  }
 }
