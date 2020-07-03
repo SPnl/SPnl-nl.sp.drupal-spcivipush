@@ -1155,37 +1155,54 @@ function spcivipush_extra_check($data, $contact) {
   $data['first_name'] = preg_replace('/[^A-Z]/', '', strtoupper($data['first_name']));
   $data['last_name'] = preg_replace('/[^A-Z]/', '', strtoupper($data['last_name']));
 
-  // Check if first and last names are missing in both contact and data.
+  // Check if first and last names are missing in contact or data.
   if (
-    empty($contact['first_name']) &&
-    empty($contact['last_name']) &&
-    empty($data['first_name']) &&
-    empty($data['last_name'])
+    (
+      empty($contact['first_name']) &&
+      empty($contact['last_name'])
+    ) ||
+    (
+      empty($data['first_name']) &&
+      empty($data['last_name'])
+    )
+  ) {
+    return TRUE;
+  }
+
+  // Check if first or last names are missing in contact and data.
+  if (
+    (
+      empty($contact['first_name']) &&
+      empty($data['first_name'])
+    ) ||
+    (
+      empty($contact['last_name']) &&
+      empty($data['last_name'])
+    )
   ) {
     return TRUE;
   }
 
   if (
-    (
       !empty($contact['first_name']) &&
-      !empty($data['first_name'])
-    ) ||
-    (
+      !empty($data['first_name']) &&
       !empty($contact['last_name']) &&
       !empty($data['last_name'])
-    )
   ) {
     // Check if complete names match.
     if ($contact['first_name'] . $contact['last_name'] == $data['first_name'] . $data['last_name']) {
       return TRUE;
     }
 
-    // Last name and first letter first name are equal.
+    // Last name and first letter first name are equal. Not for new members.
     if (
-        (strlen($data['first_name']) < 3 || strlen($contact['first_name']) < 3) &&
-        !empty($data['first_name']) &&
-        substr($contact['first_name'], 0, 1) == substr($data['first_name'], 0, 1) &&
-        $contact['last_name'] == $data['last_name']
+        $data['source'] !== 'Lidworden formulier' &&
+        (
+          !empty($data['first_name']) &&
+          !empty($contact['first_name']) &&
+          substr($contact['first_name'], 0, 1) == substr($data['first_name'], 0, 1) &&
+          $contact['last_name'] == $data['last_name']
+        )
     ) {
       return TRUE;
     }
