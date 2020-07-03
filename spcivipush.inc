@@ -298,7 +298,7 @@ function spcivipush_merge_contacts($data, $existing_contact, $debug_info) {
     'api.Phone.get' => array(),
     'api.Address.get' => array(),
     'api.CustomValue.get' => array(),
-    'return' => 'id,display_name,email,initials,birth_date,gender_id,phone,street_address,house_number,address_id,custom_111',
+    'return' => 'id,display_name,first_name,middle_name,last_name,email,initials,birth_date,gender_id,phone,street_address,house_number,address_id,custom_111',
   );
   $get_contact_results = $spcivi->api('Contact', 'get', $params);
   if (_spcivipush_check_result($get_contact_results, 'contacten', 'get', $params, $debug_info)) {
@@ -1489,15 +1489,85 @@ function spcivipush_add_do_not($data, &$params, $type) {
   }
 }
 
+/**
+ * Merge names.
+ */
 function spcivipush_merge_name($existing_contact, $data, $overwrite, &$merge_params, &$merged_data, $debug_info) {
   $contact_id = $existing_contact['id'];
-  // check if new name data.
+  // Check if new name data.
   if (!empty($data['first_name']) || !empty($data['last_name']) || !empty($data['name'])) {
 
-    // Check if name has changed.
-    $new_first = empty($data['first_name']) ? '' : $data['first_name'];
-    $new_middle = empty($data['middle_name']) ? '' : $data['middle_name'];
-    $new_last = empty($data['last_name']) ? '' : $data['last_name'];
+    $old_first = empty($existing_contact['first_name']) ? '' : trim(preg_replace('!\s+!', ' ', $existing_contact['first_name']));
+    $old_middle = empty($existing_contact['middle_name']) ? '' : trim(preg_replace('!\s+!', ' ', $existing_contact['middle_name']));
+    $old_last = empty($existing_contact['last_name']) ? '' : trim(preg_replace('!\s+!', ' ', $existing_contact['last_name']));
+
+    $new_first = empty($data['first_name']) ? '' : trim(preg_replace('!\s+!', ' ', $data['first_name']));
+    $new_middle = empty($data['middle_name']) ? '' : trim(preg_replace('!\s+!', ' ', $data['middle_name']));
+    $new_last = empty($data['last_name']) ? '' : trim(preg_replace('!\s+!', ' ', $data['last_name']));
+    $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array($new_first, $new_middle, $new_last))));
+
+    // Check for empty names.
+    if (empty($new_first) || empty($new_last)) {
+      return;
+    }
+
+    // Check for caps lock.
+    if (
+      (strlen($new_first) > 3 && strpos($new_first, '.') === FALSE && mb_strtoupper($new_first, 'utf-8') == $new_first) ||
+      (strlen($new_last) > 3 && mb_strtoupper($new_last, 'utf-8') == $new_last)
+    ) {
+      return;
+    }
+
+    // Check if first and last names are not empty.
+    if (
+      !empty($old_first) &&
+      !empty($old_last) &&
+      !empty($new_first) &&
+      !empty($new_last)
+    ) {
+      // Check if first and last name are the same.
+      if (
+        $old_first === $new_first &&
+        $old_last === $new_last
+      ) {
+        return;
+      }
+
+      // Check if only first name has changed and choose longest.
+      if (
+        $old_last === $new_last &&
+        $old_first !== $new_first
+      ) {
+        if (strlen($new_first) > strlen($old_first)) {
+          $params = array(
+            'id' => $contact_id,
+            'first_name' => $new_first,
+            'middle_name' => $old_middle,
+            'last_name' => $old_last,
+          );
+          // Merge params.
+          $merge_params = array_merge($merge_params, $params);
+          $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array(
+            $new_first,
+            $old_middle,
+            $old_last,
+          ))));
+          $old_name = trim(preg_replace('!\s+!', ' ', implode(' ', array(
+            $old_first,
+            $old_middle,
+            $old_last,
+          ))));
+          $merged_data['name'] = array(
+            'original' => $old_name,
+            'new' => $new_name,
+            'changed' => TRUE,
+          );
+          return;
+        }
+      }
+    }
+
     $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array($new_first, $new_middle, $new_last))));
     $new_name = !empty($new_name) ? $new_name : trim(preg_replace('!\s+!', ' ', $data['name']));
     $new_name = !empty($new_name) ? $new_name : '';
