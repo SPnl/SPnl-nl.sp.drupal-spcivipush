@@ -1563,8 +1563,8 @@ function spcivipush_merge_name($existing_contact, $data, $overwrite, &$merge_par
             'new' => $new_name,
             'changed' => TRUE,
           );
-          return;
         }
+        return;
       }
     }
 
