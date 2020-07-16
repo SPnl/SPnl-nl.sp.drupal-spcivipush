@@ -54,6 +54,11 @@ function spcivipush_find_existing_contact($data, $debug_info) {
   set_time_limit(60);
   $existing_contact = array();
 
+  // Check data source.
+  if ($data['source'] === 'Lidworden formulier') {
+    watchdog('spcivipush', 'Lid aanmelding');
+  }
+
   // Find existing contact based on contact_id.
   if (isset($data['contact_id'])) {
     $contact_id = $data['contact_id'];
@@ -125,7 +130,12 @@ function spcivipush_find_existing_contact($data, $debug_info) {
           if (!empty($value['api.Contact.get']['values'])) {
             foreach ($value['api.Contact.get']['values'] as $existing_contact) {
               if (empty($existing_contact['contact_is_deleted'])) {
-                if (spcivipush_extra_check($data, $existing_contact)) {
+                if ($data['source'] === 'Lidworden formulier') {
+                  if (spcivipush_extra_check($data, $existing_contact)) {
+                    return $existing_contact;
+                  }
+                }
+                else {
                   return $existing_contact;
                 }
               }
@@ -153,8 +163,10 @@ function spcivipush_find_existing_contact($data, $debug_info) {
           if (!empty($value['api.Contact.get']['values'])) {
             foreach ($value['api.Contact.get']['values'] as $existing_contact) {
               if (empty($existing_contact['contact_is_deleted'])) {
-                if (spcivipush_extra_check($data, $existing_contact)) {
-                  return $existing_contact;
+                if ($data['source'] === 'Lidworden formulier') {
+                  if (spcivipush_extra_check($data, $existing_contact)) {
+                    return $existing_contact;
+                  }
                 }
               }
             }
@@ -1194,14 +1206,13 @@ function spcivipush_extra_check($data, $contact) {
       return TRUE;
     }
 
-    // Last name and first letter first name are equal. Not for new members.
+    // First letter first name are equal. Not for new members.
     if (
         $data['source'] !== 'Lidworden formulier' &&
         (
           !empty($data['first_name']) &&
           !empty($contact['first_name']) &&
-          substr($contact['first_name'], 0, 1) == substr($data['first_name'], 0, 1) &&
-          $contact['last_name'] == $data['last_name']
+          mb_substr($contact['first_name'], 0, 1) == mb_substr($data['first_name'], 0, 1)
         )
     ) {
       return TRUE;
