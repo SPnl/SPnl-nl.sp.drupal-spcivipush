@@ -59,42 +59,29 @@ function spcivipush_find_existing_contact($data, $debug_info) {
     watchdog('spcivipush', 'Lid aanmelding');
   }
 
-  // Find existing contact based on contact_id.
-  if (isset($data['contact_id'])) {
-    $contact_id = $data['contact_id'];
+  // Find similar contacts based on email, first- and last name.
+  if (isset($data['email'])) {
     $params = array(
-      'option.limit' => 1,
-      'contact_id' => $contact_id,
-      'contact_is_deleted' => 0,
+      'option.limit' => 5,
+      'email' => $data['email'],
+      'api.Contact.get' => array(),
     );
-    $contact_results = $spcivi->api('Contact', 'get', $params);
-    if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
-      if (!empty($contact_results['values'])) {
-        $existing_contact = array_pop($contact_results['values']);
-        return $existing_contact;
-      }
-    }
-  }
-
-  // Find existing contact based on source (webform).
-  if (
-    !empty($data['source']) && (
-      preg_match('/^Form: .*\(id: [0-9]+, sid: [0-9]+,[^)]+\)$/', $data['source']) ||
-      preg_match('/^SP webformsync: .*, sid: [0-9]+ \([^)]+\)$/', $data['source']) ||
-      preg_match('/^SP webformsync: [^(]+\(domain: [^,]+, id: [0-9]+, sid: [0-9]+.*\)$/', $data['source'])
-    )
-  ) {
-    $params = array(
-      'option.limit' => 1,
-      'contact_is_deleted' => 0,
-      'contact_source' => $data['source'],
-      'contact_is_deleted' => 0,
-    );
-    $contact_results = $spcivi->api('Contact', 'get', $params);
-    if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
-      if (!empty($contact_results['values'])) {
-        $existing_contact = array_pop($contact_results['values']);
-        return $existing_contact;
+    $email_results = $spcivi->api('Email', 'get', $params);
+    if (_spcivipush_check_result($email_results, 'e-mailadressen', 'get', $params, $debug_info)) {
+      if (!empty($email_results['values'])) {
+        foreach ($email_results['values'] as $value) {
+          if (!empty($value['api.Contact.get']['values'])) {
+            foreach ($value['api.Contact.get']['values'] as $existing_contact) {
+              if (empty($existing_contact['contact_is_deleted'])) {
+                if ($data['source'] === 'Lidworden formulier') {
+                  if (spcivipush_extra_check($data, $existing_contact)) {
+                    return $existing_contact;
+                  }
+                }
+              }
+            }
+          }
+        }
       }
     }
     else {
@@ -149,29 +136,42 @@ function spcivipush_find_existing_contact($data, $debug_info) {
     }
   }
 
-  // Find similar contacts based on email, first- and last name.
-  if (isset($data['email'])) {
+  // Find existing contact based on contact_id.
+  if (isset($data['contact_id'])) {
+    $contact_id = $data['contact_id'];
     $params = array(
-      'option.limit' => 5,
-      'email' => $data['email'],
-      'api.Contact.get' => array(),
+      'option.limit' => 1,
+      'contact_id' => $contact_id,
+      'contact_is_deleted' => 0,
     );
-    $email_results = $spcivi->api('Email', 'get', $params);
-    if (_spcivipush_check_result($email_results, 'e-mailadressen', 'get', $params, $debug_info)) {
-      if (!empty($email_results['values'])) {
-        foreach ($email_results['values'] as $value) {
-          if (!empty($value['api.Contact.get']['values'])) {
-            foreach ($value['api.Contact.get']['values'] as $existing_contact) {
-              if (empty($existing_contact['contact_is_deleted'])) {
-                if ($data['source'] === 'Lidworden formulier') {
-                  if (spcivipush_extra_check($data, $existing_contact)) {
-                    return $existing_contact;
-                  }
-                }
-              }
-            }
-          }
-        }
+    $contact_results = $spcivi->api('Contact', 'get', $params);
+    if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
+      if (!empty($contact_results['values'])) {
+        $existing_contact = array_pop($contact_results['values']);
+        return $existing_contact;
+      }
+    }
+  }
+
+  // Find existing contact based on source (webform).
+  if (
+    !empty($data['source']) && (
+      preg_match('/^Form: .*\(id: [0-9]+, sid: [0-9]+,[^)]+\)$/', $data['source']) ||
+      preg_match('/^SP webformsync: .*, sid: [0-9]+ \([^)]+\)$/', $data['source']) ||
+      preg_match('/^SP webformsync: [^(]+\(domain: [^,]+, id: [0-9]+, sid: [0-9]+.*\)$/', $data['source'])
+    )
+  ) {
+    $params = array(
+      'option.limit' => 1,
+      'contact_is_deleted' => 0,
+      'contact_source' => $data['source'],
+      'contact_is_deleted' => 0,
+    );
+    $contact_results = $spcivi->api('Contact', 'get', $params);
+    if (_spcivipush_check_result($contact_results, 'een contact', 'get', $params, $debug_info)) {
+      if (!empty($contact_results['values'])) {
+        $existing_contact = array_pop($contact_results['values']);
+        return $existing_contact;
       }
     }
     else {
