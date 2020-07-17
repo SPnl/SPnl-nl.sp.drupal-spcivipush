@@ -78,6 +78,9 @@ function spcivipush_find_existing_contact($data, $debug_info) {
                     return $existing_contact;
                   }
                 }
+                else {
+                  return $existing_contact;
+                }
               }
             }
           }
