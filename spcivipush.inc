@@ -65,6 +65,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
       'option.limit' => 5,
       'email' => $data['email'],
       'api.Contact.get' => array(),
+      'api.Membership.get' => array('contact_id' => "\$value.contact_id"),
     );
     $email_results = $spcivi->api('Email', 'get', $params);
     if (_spcivipush_check_result($email_results, 'e-mailadressen', 'get', $params, $debug_info)) {
@@ -73,7 +74,9 @@ function spcivipush_find_existing_contact($data, $debug_info) {
           if (!empty($value['api.Contact.get']['values'])) {
             foreach ($value['api.Contact.get']['values'] as $existing_contact) {
               if (empty($existing_contact['contact_is_deleted'])) {
-                if ($data['source'] === 'Lidworden formulier') {
+                // Check membership.
+                $membership = empty($value['api.Membership.get']['values']) ? FALSE : TRUE;
+                if ($data['source'] === 'Lidworden formulier' && $membership) {
                   if (spcivipush_extra_check($data, $existing_contact)) {
                     return $existing_contact;
                   }
@@ -112,6 +115,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
       'option.limit' => 5,
       'phone_numeric' => array('IN' => $numbers_to_check),
       'api.Contact.get' => array(),
+      'api.Membership.get' => array('contact_id' => "\$value.contact_id"),
     );
     $mobile_phone_results = $spcivi->api('Phone', 'get', $params);
     if (_spcivipush_check_result($mobile_phone_results, 'telefoonnummers', 'get', $params, $debug_info)) {
@@ -120,7 +124,8 @@ function spcivipush_find_existing_contact($data, $debug_info) {
           if (!empty($value['api.Contact.get']['values'])) {
             foreach ($value['api.Contact.get']['values'] as $existing_contact) {
               if (empty($existing_contact['contact_is_deleted'])) {
-                if ($data['source'] === 'Lidworden formulier') {
+                $membership = empty($value['api.Membership.get']['values']) ? FALSE : TRUE;
+                if ($data['source'] === 'Lidworden formulier' && $membership) {
                   if (spcivipush_extra_check($data, $existing_contact)) {
                     return $existing_contact;
                   }
@@ -194,6 +199,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
         'street_number' => $data['house_number'],
         'postal_code' => $data['postal_code'],
         'api.Contact.get' => array(),
+        'api.Membership.get' => array('contact_id' => "\$value.contact_id"),
       );
     }
     if (isset($data['street']) && isset($data['house_number']) && isset($data['locality'])) {
@@ -203,20 +209,26 @@ function spcivipush_find_existing_contact($data, $debug_info) {
         'street_name' => $data['street'],
         'city' => $data['locality'],
         'api.Contact.get' => array(),
+        'api.Membership.get' => array('contact_id' => "\$value.contact_id"),
       );
     }
 
-      if (!empty($params)) {
-
+    if (!empty($params)) {
       // Check if address with same house number and postal code exists.
       $get_address_result = $spcivi->api('Address', 'get', $params);
-      if(_spcivipush_check_result($get_address_result, 'een adres', 'get', $params, $debug_info)) {
+      if (_spcivipush_check_result($get_address_result, 'een adres', 'get', $params, $debug_info)) {
         if (!empty($get_address_result['values'])) {
           foreach ($get_address_result['values'] as $value) {
             if (!empty($value['api.Contact.get']['values'])) {
               foreach ($value['api.Contact.get']['values'] as $existing_contact) {
                 if (empty($existing_contact['contact_is_deleted'])) {
-                  if (spcivipush_extra_check($data, $existing_contact)) {
+                  $membership = empty($value['api.Membership.get']['values']) ? FALSE : TRUE;
+                  if ($data['source'] === 'Lidworden formulier' && $membership) {
+                    if (spcivipush_extra_check($data, $existing_contact)) {
+                      return $existing_contact;
+                    }
+                  }
+                  else {
                     return $existing_contact;
                   }
                 }
