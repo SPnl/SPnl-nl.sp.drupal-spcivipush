@@ -1793,6 +1793,7 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
   // Check if primary address should be added.
   if (
     $overwrite ||
+    empty($existing_contact['api.Membership.get']['values']) ||
     empty($primary_address) ||
     (
       empty($existing_contact['street_address']) &&
@@ -1872,18 +1873,11 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
       if ($address_data_found) {
         // Store merged data.
         $merge_params = array_merge($merge_params, array('api.Address.create' => array($params)));
-        if (!empty($existing_contact['address_id'])) {
-          foreach ($address_merge_fields as $key => $value) {
-            $merged_data['address'][$key] = $value;
-          };
-          $merged_data['address']['primary_text'] = ' primair';
-          $merged_data['original_address'] = $original_address;
-        }
       }
     }
   }
   else {
-    // No overwrite, check if comparable address exists, then do nothing, else add new address.
+    // No overwrite or membership exists, check if comparable address exists, then do nothing, else add new address.
 
     $comparable_address = array();
 
@@ -1963,12 +1957,15 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
         }
         if ($address_data_found) {
           $merge_params = array_merge($merge_params, array('api.Address.create' => array($params)));
-          if (!empty($existing_contact['address_id'])) {
+          if (
+            !empty($existing_contact['address_id']) &&
+            !empty($existing_contact['api.Membership.get']['values'])
+          ) {
             foreach ($address_merge_fields as $key => $value) {
               $merged_data['address'][$key] = $value;
             };
             $merged_data['original_address'] = $original_address;
-            $merged_data['address']['primary_text'] = $primary ? ' primair' : ' (nog niet ingesteld als primair)';
+            $merged_data['address']['primary_text'] = $primary ? ' primair, lidmaatschap aanwezig' : ' (nog niet ingesteld als primair, lidmaatschap aanwezig)';
           }
         }
       }
