@@ -325,6 +325,7 @@ function spcivipush_merge_contacts($data, $existing_contact, $debug_info) {
     'api.Phone.get' => array(),
     'api.Address.get' => array(),
     'api.CustomValue.get' => array(),
+    'api.Membership.get' => array(),
     'return' => 'id,display_name,first_name,middle_name,last_name,email,initials,birth_date,gender_id,phone,street_address,house_number,address_id,custom_111',
   );
   $get_contact_results = $spcivi->api('Contact', 'get', $params);
@@ -1617,7 +1618,11 @@ function spcivipush_merge_email($existing_contact, $data, $overwrite, &$merge_pa
   if (!empty($data['email'])) {
     // Check if e-mail is already set.
     if (!in_array($data['email'], array_column($existing_contact['api.Email.get']['values'], 'email'))) {
-      if (empty($existing_contact['email']) || $overwrite) {
+      if (
+        empty($existing_contact['email']) ||
+        $overwrite ||
+        empty($existing_contact['api.Membership.get']['values'])
+      ) {
         $primary = 1;
         $location_type_id = 1;
       }
@@ -1632,10 +1637,12 @@ function spcivipush_merge_email($existing_contact, $data, $overwrite, &$merge_pa
         'is_primary' => $primary,
       );
       $merge_params = array_merge($merge_params, array('api.Email.create' => array($params)));
-      $merged_data['email'] = array(
-        'email' => $data['email'],
-        'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair)',
-      );
+      if (!empty($existing_contact['api.Membership.get']['values'])) {
+        $merged_data['email'] = array(
+          'email' => $data['email'],
+          'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair, heeft of had lidmaatschap)',
+        );
+      }
     }
   }
 }
