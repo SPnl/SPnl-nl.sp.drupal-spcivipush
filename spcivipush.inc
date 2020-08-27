@@ -1704,7 +1704,7 @@ function spcivipush_merge_telephone($existing_contact, $data, $overwrite, &$merg
     // Check if phone is already set.
     if (!in_array($data['telephone'], array_column($existing_contact['api.Phone.get']['values'], 'phone_numeric'))) {
       // Phone doesn't exist, add.
-      if (empty($existing_contact['phone']) || $overwrite) {
+      if (empty($existing_contact['phone']) || $overwrite || empty($existing_contact['api.Membership.get']['values'])) {
         $primary = $is_primary;
       }
       else {
@@ -1723,10 +1723,10 @@ function spcivipush_merge_telephone($existing_contact, $data, $overwrite, &$merg
         'is_primary' => $primary,
         'phone_type_id' => $phone_type_id,
       );
-      if (!empty($existing_contact['phone'])) {
+      if (!empty($existing_contact['phone']) && !empty($existing_contact['api.Membership.get']['values']) && $primary == 0) {
         $merged_data['phone'] = array(
           'phone' => $data['telephone'],
-          'primary_text' => $primary ? ' primair' : ' (niet ingesteld als primair)',
+          'primary_text' => ' (niet ingesteld als primair, lidmaatschap aanwezig)',
         );
       }
     }
@@ -1748,10 +1748,10 @@ function spcivipush_merge_telephone($existing_contact, $data, $overwrite, &$merg
         'is_primary' => $primary,
         'phone_type_id' => 2,
       );
-      if (!empty($existing_contact['phone'])) {
+      if (!empty($existing_contact['phone']) && !empty($existing_contact['api.Membership.get']['values']) && $primary == 0) {
         $merged_data['phone_mobile'] = array(
           'phone_mobile' => $data['phone_mobile'],
-          'primary_text' => $primary ? ' primair' : ' (niet ingesteld als primair)',
+          'primary_text' => ' (niet ingesteld als primair, lidmaatschap aanwezig)',
         );
       }
     }
