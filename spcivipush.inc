@@ -1524,20 +1524,67 @@ function spcivipush_merge_name($existing_contact, $data, $overwrite, &$merge_par
   if (!empty($data['first_name']) || !empty($data['last_name']) || !empty($data['name'])) {
 
     $old_first = empty($existing_contact['first_name']) ? '' : trim(preg_replace('!\s+!', ' ', $existing_contact['first_name']));
+    $old_first_capitalized = mb_convert_case($old_first, MB_CASE_TITLE, "UTF-8");
     $old_middle = empty($existing_contact['middle_name']) ? '' : trim(preg_replace('!\s+!', ' ', $existing_contact['middle_name']));
     $old_last = empty($existing_contact['last_name']) ? '' : trim(preg_replace('!\s+!', ' ', $existing_contact['last_name']));
+    $old_last_capitalized = mb_convert_case($old_last, MB_CASE_TITLE, "UTF-8");
 
     $new_first = empty($data['first_name']) ? '' : trim(preg_replace('!\s+!', ' ', $data['first_name']));
+    $new_first = mb_convert_case($new_first, MB_CASE_TITLE, "UTF-8");
+
     $new_middle = empty($data['middle_name']) ? '' : trim(preg_replace('!\s+!', ' ', $data['middle_name']));
     $new_last = empty($data['last_name']) ? '' : trim(preg_replace('!\s+!', ' ', $data['last_name']));
+    $new_last = mb_convert_case($new_last, MB_CASE_TITLE, "UTF-8");
     $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array($new_first, $new_middle, $new_last))));
 
-    // Check for empty names.
+    // Check if old name lacks first letter capital.
+    if ($old_first !== $old_first_capitalized) {
+      $params = array(
+        'id' => $contact_id,
+        'first_name' => $old_first_capitalized,
+      );
+      // Merge params.
+      $merge_params = array_merge($merge_params, $params);
+    }
+
+    // Check if old name lacks first letter capital.
+    if ($old_last !== $old_last_capitalized) {
+      $params = array(
+        'id' => $contact_id,
+        'last_name' => $old_last_capitalized,
+      );
+      // Merge params.
+      $merge_params = array_merge($merge_params, $params);
+    }
+
+    // Check for empty new names.
     if (empty($new_first) || empty($new_last)) {
+      // Keep old name.
       return;
     }
 
-    // Check for caps lock.
+    // Check for empty old names.
+    if (empty($old_first) || empty($old_last)) {
+      $params = array(
+        'id' => $contact_id,
+        'first_name' => $new_first,
+        'middle_name' => $new_middle,
+        'last_name' => $new_last,
+      );
+      // Merge params.
+      $merge_params = array_merge($merge_params, $params);
+      return;
+    }
+
+    // Check if first and last name are the same.
+    if (
+      $old_first === $new_first &&
+      $old_last === $new_last
+    ) {
+      return;
+    }
+
+    // Check for caps lock in new name.
     if (
       (strlen($new_first) > 3 && strpos($new_first, '.') === FALSE && mb_strtoupper($new_first, 'utf-8') == $new_first) ||
       (strlen($new_last) > 3 && mb_strtoupper($new_last, 'utf-8') == $new_last)
@@ -1545,127 +1592,23 @@ function spcivipush_merge_name($existing_contact, $data, $overwrite, &$merge_par
       return;
     }
 
-    // Check if first and last names are not empty.
+    // Check if only first name has changed and choose longest.
     if (
-      !empty($old_first) &&
-      !empty($old_last) &&
-      !empty($new_first) &&
-      !empty($new_last)
+      $old_last === $new_last &&
+      $old_first !== $new_first
     ) {
-      // Check if first and last name are the same.
-      if (
-        $old_first === $new_first &&
-        $old_last === $new_last
-      ) {
-        return;
+      if (strlen($new_first) > strlen($old_first)) {
+        $params = array(
+          'id' => $contact_id,
+          'first_name' => $new_first,
+          'middle_name' => $old_middle,
+          'last_name' => $old_last,
+        );
+        // Merge params.
+        $merge_params = array_merge($merge_params, $params);
+        // No activity needed (no $merged_data update).
       }
-
-      // Check if only first name has changed and choose longest.
-      if (
-        $old_last === $new_last &&
-        $old_first !== $new_first
-      ) {
-        if (strlen($new_first) > strlen($old_first)) {
-          $params = array(
-            'id' => $contact_id,
-            'first_name' => $new_first,
-            'middle_name' => $old_middle,
-            'last_name' => $old_last,
-          );
-          // Merge params.
-          $merge_params = array_merge($merge_params, $params);
-          $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array(
-            $new_first,
-            $old_middle,
-            $old_last,
-          ))));
-          $old_name = trim(preg_replace('!\s+!', ' ', implode(' ', array(
-            $old_first,
-            $old_middle,
-            $old_last,
-          ))));
-          $merged_data['name'] = array(
-            'original' => $old_name,
-            'new' => $new_name,
-            'changed' => TRUE,
-          );
-        }
-        return;
-      }
-    }
-
-    $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array($new_first, $new_middle, $new_last))));
-    $new_name = !empty($new_name) ? $new_name : trim(preg_replace('!\s+!', ' ', $data['name']));
-    $new_name = !empty($new_name) ? $new_name : '';
-    $new_name_array = explode(' ', $new_name);
-
-    $old_name = empty($existing_contact['display_name']) ? '' : $existing_contact['display_name'];
-    $old_name = trim(preg_replace('!\s+!', ' ', $old_name));
-    $old_name_array = explode(' ', $old_name);
-
-    // Check if new name is different from old name.
-    if (!empty($new_name) && $old_name !== $new_name) {
-      // Check if newname is caps locked.
-      if (strtoupper($new_name) !== $new_name) {
-        // Check if old name contains new name.
-        if (strpos($old_name, $new_name) === FALSE) {
-          // Check if new name only first letter.
-          if (
-            !(
-              count($new_name_array) > 1 &&
-              count($old_name_array) === count($new_name_array) &&
-              strtoupper(substr($new_name_array[0], 0, 1)) === strtoupper(substr($old_name_array[0], 0, 1)) &&
-              (
-                strpos($new_name_array[0], '.') !== FALSE ||
-                (
-                  strlen(str_replace('.', '', $new_name_array[0])) < 3 &&
-                  strlen(str_replace('.', '', $new_name_array[0])) <  strlen(str_replace('.', '', $old_name_array[0]))
-                )
-              )
-            )
-          ) {
-            // Check if new name can be written without check.
-            if (empty($old_name) || $overwrite || valid_email_address($old_name)) {
-              // Write new name without confirmation.
-
-              $params = array(
-                'id' => $contact_id,
-              );
-              $autosync = array(
-                'first_name' => 'first_name',
-                'middle_name' => 'middle_name',
-                'last_name' => 'last_name',
-              );
-              foreach ($autosync as $key => $civikey) {
-                if (!empty($data[$key])) {
-                  $params[$civikey] = $data[$key];
-                }
-              }
-              // Make sure last name is set, if data is available.
-              if (empty($data['first_name']) && empty($data['last_name']) && !empty($data['name'])) {
-                $params['last_name'] = $data['name'];
-              }
-              // Merge params.
-              $merge_params = array_merge($merge_params, $params);
-              if (!valid_email_address($old_name)) {
-                $merged_data['name'] = array(
-                  'original' => $existing_contact['display_name'],
-                  'new' => $new_name,
-                  'changed' => TRUE,
-                );
-              }
-            }
-            else {
-              // No new name written, create action to check new name.
-              $merged_data['name'] = array(
-                'original' => $existing_contact['display_name'],
-                'new' => $new_name,
-                'changed' => FALSE,
-              );
-            }
-          }
-        }
-      }
+      return;
     }
   }
 }
