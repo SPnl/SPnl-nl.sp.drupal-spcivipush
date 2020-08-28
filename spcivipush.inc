@@ -1640,7 +1640,7 @@ function spcivipush_merge_email($existing_contact, $data, $overwrite, &$merge_pa
       if (!empty($existing_contact['api.Membership.get']['values'])) {
         $merged_data['email'] = array(
           'email' => $data['email'],
-          'primary_text' => $primary ? ' primair' : ' (nog niet ingesteld als primair, heeft of had lidmaatschap)',
+          'primary_text' => $primary ? ' primair, heeft of had lidmaatschap' : ' (nog niet ingesteld als primair, heeft of had lidmaatschap)',
         );
       }
     }
