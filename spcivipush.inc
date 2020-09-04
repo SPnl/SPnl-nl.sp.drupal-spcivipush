@@ -62,7 +62,8 @@ function spcivipush_find_existing_contact($data, $debug_info) {
   // Find similar contacts based on email, first- and last name.
   if (isset($data['email'])) {
     $params = array(
-      'option.limit' => 5,
+      'option.limit' => 50,
+      'options' => array('sort' => "id DESC"),
       'email' => $data['email'],
       'api.Contact.get' => array(),
       'api.Membership.get' => array('contact_id' => "\$value.contact_id"),
@@ -112,7 +113,8 @@ function spcivipush_find_existing_contact($data, $debug_info) {
       '31' . substr($mobile_phone, 1),
     );
     $params = array(
-      'option.limit' => 5,
+      'option.limit' => 50,
+      'options' => array('sort' => "id DESC"),
       'phone_numeric' => array('IN' => $numbers_to_check),
       'api.Contact.get' => array(),
       'api.Membership.get' => array('contact_id' => "\$value.contact_id"),
@@ -195,7 +197,8 @@ function spcivipush_find_existing_contact($data, $debug_info) {
   ) {
     if (isset($data['postal_code']) && isset($data['house_number'])) {
       $params = array(
-        'option.limit' => 5,
+        'option.limit' => 50,
+        'options' => array('sort' => "id DESC"),
         'street_number' => $data['house_number'],
         'postal_code' => $data['postal_code'],
         'api.Contact.get' => array(),
@@ -204,7 +207,8 @@ function spcivipush_find_existing_contact($data, $debug_info) {
     }
     if (isset($data['street']) && isset($data['house_number']) && isset($data['locality'])) {
       $params = array(
-        'option.limit' => 5,
+        'option.limit' => 50,
+        'options' => array('sort' => "id DESC"),
         'street_number' => $data['house_number'],
         'street_name' => $data['street'],
         'city' => $data['locality'],
