@@ -77,6 +77,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
               if (empty($existing_contact['contact_is_deleted'])) {
                 // Check membership.
                 $membership = empty($value['api.Membership.get']['values']) ? FALSE : TRUE;
+                $existing_contact['is_member'] = $membership;
                 if ($data['source'] === 'Lidworden formulier' && $membership) {
                   if (spcivipush_extra_check($data, $existing_contact)) {
                     return $existing_contact;
@@ -127,6 +128,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
             foreach ($value['api.Contact.get']['values'] as $existing_contact) {
               if (empty($existing_contact['contact_is_deleted'])) {
                 $membership = empty($value['api.Membership.get']['values']) ? FALSE : TRUE;
+                $existing_contact['is_member'] = $membership;
                 if ($data['source'] === 'Lidworden formulier' && $membership) {
                   if (spcivipush_extra_check($data, $existing_contact)) {
                     return $existing_contact;
@@ -227,6 +229,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
               foreach ($value['api.Contact.get']['values'] as $existing_contact) {
                 if (empty($existing_contact['contact_is_deleted'])) {
                   $membership = empty($value['api.Membership.get']['values']) ? FALSE : TRUE;
+                  $existing_contact['is_member'] = $membership;
                   if ($data['source'] === 'Lidworden formulier' && $membership) {
                     if (spcivipush_extra_check($data, $existing_contact)) {
                       return $existing_contact;
@@ -1623,9 +1626,13 @@ function spcivipush_merge_email($existing_contact, $data, $overwrite, &$merge_pa
     // Check if e-mail is already set.
     if (!in_array($data['email'], array_column($existing_contact['api.Email.get']['values'], 'email'))) {
       if (
-        empty($existing_contact['email']) ||
-        $overwrite ||
-        empty($existing_contact['api.Membership.get']['values'])
+        empty($existing_contact['is_member']) &&
+        strpos($existing_contact['email'], '@sp.nl') === FALSE &&
+        (
+          empty($existing_contact['email']) ||
+          $overwrite ||
+          empty($existing_contact['api.Membership.get']['values'])
+        )
       ) {
         $primary = 1;
         $location_type_id = 1;
