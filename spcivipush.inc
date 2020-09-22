@@ -53,6 +53,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
   $spcivi = \SPCivi::getInstance();
   set_time_limit(60);
   $existing_contact = array();
+  $existing_contact['is_member'] = FALSE;
 
   // Check data source.
   if ($data['source'] === 'Lidworden formulier') {
@@ -77,6 +78,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
               if (empty($existing_contact['contact_is_deleted'])) {
                 // Check membership.
                 $membership = empty($value['api.Membership.get']['values']) ? FALSE : TRUE;
+                $existing_contact['is_member'] = $membership;
                 if ($data['source'] === 'Lidworden formulier' || $membership) {
                   if (spcivipush_extra_check($data, $existing_contact)) {
                     return $existing_contact;
@@ -127,6 +129,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
             foreach ($value['api.Contact.get']['values'] as $existing_contact) {
               if (empty($existing_contact['contact_is_deleted'])) {
                 $membership = empty($value['api.Membership.get']['values']) ? FALSE : TRUE;
+                $existing_contact['is_member'] = $membership;
                 if ($data['source'] === 'Lidworden formulier' || $membership) {
                   if (spcivipush_extra_check($data, $existing_contact)) {
                     return $existing_contact;
@@ -227,6 +230,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
               foreach ($value['api.Contact.get']['values'] as $existing_contact) {
                 if (empty($existing_contact['contact_is_deleted'])) {
                   $membership = empty($value['api.Membership.get']['values']) ? FALSE : TRUE;
+                  $existing_contact['is_member'] = $membership;
                   if ($data['source'] === 'Lidworden formulier' || $membership) {
                     if (spcivipush_extra_check($data, $existing_contact)) {
                       return $existing_contact;
@@ -1542,6 +1546,24 @@ function spcivipush_merge_name($existing_contact, $data, $overwrite, &$merge_par
     $new_last = mb_convert_case($new_last, MB_CASE_TITLE, "UTF-8");
     $new_name = trim(preg_replace('!\s+!', ' ', implode(' ', array($new_first, $new_middle, $new_last))));
 
+    // Membership.
+    if ($overwrite) {
+      $params = array(
+        'id' => $contact_id,
+        'first_name' => $new_first,
+        'middle_name' => $new_middle,
+        'last_name' => $new_last,
+      );
+      // Merge params.
+      $merge_params = array_merge($merge_params, $params);
+      return;
+    }
+
+    // Existing contact is member.
+    if ($existing_contact['is_member']) {
+      return;
+    }
+
     // Check if old name lacks first letter capital.
     if ($old_first !== $old_first_capitalized) {
       $params = array(
@@ -1623,12 +1645,12 @@ function spcivipush_merge_email($existing_contact, $data, $overwrite, &$merge_pa
     // Check if e-mail is already set.
     if (!in_array($data['email'], array_column($existing_contact['api.Email.get']['values'], 'email'))) {
       if (
-        empty($existing_contact['is_member']) &&
+        !$existing_contact['is_member'] &&
         strpos($existing_contact['email'], '@sp.nl') === FALSE &&
         (
           empty($existing_contact['email']) ||
           $overwrite ||
-          empty($existing_contact['api.Membership.get']['values'])
+          !$existing_contact['is_member']
         )
       ) {
         $primary = 1;
@@ -1645,7 +1667,7 @@ function spcivipush_merge_email($existing_contact, $data, $overwrite, &$merge_pa
         'is_primary' => $primary,
       );
       $merge_params = array_merge($merge_params, array('api.Email.create' => array($params)));
-      if (!empty($existing_contact['api.Membership.get']['values'])) {
+      if ($existing_contact['is_member']) {
         $merged_data['email'] = array(
           'email' => $data['email'],
           'primary_text' => $primary ? ' primair, heeft of had lidmaatschap' : ' (nog niet ingesteld als primair, heeft of had lidmaatschap)',
@@ -1659,7 +1681,6 @@ function spcivipush_merge_initials($existing_contact, $data, $overwrite, &$merge
   if (!empty($data['initials'])) {
     // Check if birth date is already set.
     if (empty($existing_contact['custom_111']) || $overwrite) {
-      // Add email.
       $merge_params['custom_111'] = $data['initials'];
       $merged_data['initials'] = $data['initials'];
     }
@@ -1712,7 +1733,7 @@ function spcivipush_merge_telephone($existing_contact, $data, $overwrite, &$merg
     // Check if phone is already set.
     if (!in_array($data['telephone'], array_column($existing_contact['api.Phone.get']['values'], 'phone_numeric'))) {
       // Phone doesn't exist, add.
-      if (empty($existing_contact['phone']) || $overwrite || empty($existing_contact['api.Membership.get']['values'])) {
+      if (empty($existing_contact['phone']) || $overwrite || !$existing_contact['is_member']) {
         $primary = $is_primary;
       }
       else {
@@ -1801,7 +1822,7 @@ function spcivipush_merge_address($existing_contact, $data, $overwrite, &$merge_
   // Check if primary address should be added.
   if (
     $overwrite ||
-    empty($existing_contact['api.Membership.get']['values']) ||
+    !$existing_contact['is_member'] ||
     empty($primary_address) ||
     (
       empty($existing_contact['street_address']) &&
