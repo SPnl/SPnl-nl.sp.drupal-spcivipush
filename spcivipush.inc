@@ -1180,10 +1180,6 @@ function spcivipush_extra_check($data, $contact) {
   if (valid_email_address($contact['display_name'])) {
     return TRUE;
   }
-  // Check birthdate.
-  if (isset($data['birth_date']) && $data['birth_date'] === $contact['birth_date']) {
-    return TRUE;
-  }
 
   // Name check.
   $contact['first_name'] = preg_replace('/[^A-Z]/', '', strtoupper($contact['first_name']));
