@@ -279,15 +279,6 @@ function spcivipush_add_contact($data, $debug_info) {
   // Add sp_work_and_int.
   spcivipush_add_sp_work_and_int($data, $params);
 
-  // Add unverified tag.
-  $tag_id = variable_get('spcivipush_unverified_tag', FALSE);
-  if (!empty($tag_id)) {
-    $tag_params = array(
-      'tag_id' => $tag_id,
-    );
-    $params = array_merge($params, array('api.EntityTag.create' => $tag_params));
-  }
-
   // Add is_opt_out, do_not_phone, and do_not_sms.
   $do_not_items = spcivipush_do_not_items();
   foreach ($do_not_items as $do_not_item) {
