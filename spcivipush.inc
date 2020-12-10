@@ -229,14 +229,7 @@ function spcivipush_find_existing_contact($data, $debug_info) {
             if (!empty($value['api.Contact.get']['values'])) {
               foreach ($value['api.Contact.get']['values'] as $existing_contact) {
                 if (empty($existing_contact['contact_is_deleted'])) {
-                  $membership = empty($value['api.Membership.get']['values']) ? FALSE : TRUE;
-                  $existing_contact['is_member'] = $membership;
-                  if ($data['source'] === 'Lidworden formulier' || $membership) {
-                    if (spcivipush_extra_check($data, $existing_contact)) {
-                      return $existing_contact;
-                    }
-                  }
-                  else {
+                  if (spcivipush_extra_check($data, $existing_contact)) {
                     return $existing_contact;
                   }
                 }
