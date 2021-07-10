@@ -1,0 +1,86 @@
+<?php
+
+require_once __DIR__ . '/../spcivipush.inc';
+
+class SubmissionTestCase extends DrupalWebTestCase {
+  public function setUp() {
+    parent::setUp(array('spcivipush'));
+  }
+
+  public static function getInfo() {
+    // Note: getInfo() strings should not be translated.
+    return array(
+      'name' => 'CiviCRM submission unit tests',
+      'description' => 'Tests for checking CiviCRMpush checks.',
+      'group' => 'sprbs',
+    );
+
+  }
+
+  public function testInvalidSubmissionSufficient() {
+    $submission = array(
+      'first_name' => 'Tester',
+      'last_name' => 'de Vries'
+    );
+    $ret = spcivipush_check_submission_sufficient($submission);
+    $this->assertFalse($ret, 'Invalid submission should be rejected');
+  }
+
+  public function testAddressSufficient() {
+    $street_and_number = 'Testlaan 3';
+    $street = 'Testlaan';
+    $houseNumber = 1;
+    $locality = 'Teststad';
+    $postalCode = '1234AB';
+
+    $postalCodeAndHomeNumber = array(
+      'postal_code' => $postalCode,
+      'house_number' => $houseNumber,
+    );
+    $streetWithHouseNumberAndLocality = array(
+      'street' => $street,
+      'house_number' => $houseNumber,
+      'locality' => $locality,
+    );
+    $addressStreetAndNumberLocality = array(
+      'street_and_number' => $street_and_number,
+      'locality' => $locality,
+    );
+    $this->assertTrue(spcivipush_check_address_sufficient($postalCodeAndHomeNumber),
+                      'Postal Code and House number should be sufficient');
+    $this->assertTrue(spcivipush_check_address_sufficient($streetWithHouseNumberAndLocality),
+                      'Street, house number and locality should be sufficient');
+    $this->assertTrue(spcivipush_check_address_sufficient($addressStreetAndNumberLocality),
+                      'Street + Number and locality should be sufficient');
+
+  }
+
+  /**
+   * Tests for the cases: email, email
+   * and phone, only phone, only address
+   */
+  public function testSubmissionSufficient() {
+    $submissionOnlyEmail = array(
+      'first_name' => 'Tester',
+      'last_name' => 'de Tester',
+      'email' => 'tester@sp.nl'
+    );
+    $submissionOnlyPhone = array(
+      'first_name' => 'Tester',
+      'last_name' => 'de Tester',
+      'telephone' => '06123456789',
+    );
+    $submissionPhoneAndEmail = $submissionOnlyPhone;
+    $submissionPhoneAndEmail['email'] = 'tester@sp.nl';
+
+    $retOnlyEmail = spcivipush_check_submission_sufficient($submissionOnlyEmail);
+    $this->assertTrue($retOnlyEmail, 'Only an email should be sufficient');
+
+    $retOnlyPhone = spcivipush_check_submission_sufficient($submissionOnlyPhone);
+    $this->assertTrue($retOnlyPhone, 'Only a phone number should be sufficient');
+
+    $retPhoneAndEmail = spcivipush_check_submission_sufficient($submissionPhoneAndEmail);
+    $this->assertTrue($retPhoneAndEmail, 'Both a phone and email should be sufficient');
+  }
+
+}
